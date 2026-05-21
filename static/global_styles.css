@@ -1,0 +1,419 @@
+/* ============================================================
+   Dropwise — Stiluri globale
+   Fundamentul vizual pentru întregul site
+   ============================================================ */
+
+/* ---------- 1. Fonturi ---------- */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,900&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@300;400;500;600;700&display=swap');
+
+/* ---------- 2. Variabile globale (Design Tokens) ---------- */
+:root {
+  /* Paletă — verde natural, profesional */
+  --color-bg-deep:     #0d1f17;   /* fundal foarte închis, aproape negru-verde */
+  --color-bg-base:     #14291f;   /* fundal de bază */
+  --color-bg-elevated: #1c3a2c;   /* carduri ridicate */
+  --color-surface:     rgba(255, 255, 255, 0.08);    /* sticlă */
+  --color-surface-strong: rgba(255, 255, 255, 0.14);
+  --color-border:      rgba(255, 255, 255, 0.18);
+  --color-border-soft: rgba(255, 255, 255, 0.10);
+
+  /* Verzi de accent (de la închis la deschis) */
+  --color-leaf-dark:   #2d5a3f;
+  --color-leaf:        #4a8c5f;
+  --color-leaf-bright: #7dc99a;
+  --color-mint:        #b8f0c9;   /* accent principal — mentă pal */
+  --color-mint-soft:   #d4f5dd;
+
+  /* Text */
+  --color-text:        #f4f8f5;
+  --color-text-muted:  rgba(244, 248, 245, 0.78);
+  --color-text-faint:  rgba(244, 248, 245, 0.55);
+  --color-text-on-mint: #0d1f17;
+
+  /* Tipografie */
+  --font-display: 'Fraunces', 'Georgia', serif;
+  --font-body:    'Manrope', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --fs-xs:   0.8125rem;   /* 13px */
+  --fs-sm:   0.9375rem;   /* 15px */
+  --fs-base: 1rem;        /* 16px */
+  --fs-md:   1.125rem;    /* 18px */
+  --fs-lg:   1.375rem;    /* 22px */
+  --fs-xl:   1.875rem;    /* 30px */
+  --fs-2xl:  2.5rem;      /* 40px */
+  --fs-3xl:  3.5rem;      /* 56px */
+  --fs-4xl:  4.75rem;     /* 76px */
+
+  --lh-tight: 1.1;
+  --lh-snug:  1.25;
+  --lh-base:  1.6;
+
+  --tracking-tight:  -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.08em;
+  --tracking-wider:  0.18em;
+
+  /* Spațiere (scală de 4px) */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.5rem;
+  --space-6:  2rem;
+  --space-7:  3rem;
+  --space-8:  4rem;
+  --space-9:  6rem;
+  --space-10: 8rem;
+
+  /* Forme */
+  --radius-sm:   8px;
+  --radius-md:   14px;
+  --radius-lg:   22px;
+  --radius-xl:   32px;
+  --radius-pill: 999px;
+
+  /* Umbre */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.42);
+  --shadow-glow-mint: 0 0 0 1px rgba(184, 240, 201, 0.25), 0 12px 40px rgba(184, 240, 201, 0.18);
+
+  /* Tranziții */
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast:  160ms;
+  --dur-base:  280ms;
+  --dur-slow:  520ms;
+
+  /* Layout */
+  --container-max: 1280px;
+  --container-pad: clamp(1.25rem, 4vw, 3rem);
+}
+
+/* ---------- 3. Reset & baza ---------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  line-height: var(--lh-base);
+  color: var(--color-text);
+  background-color: var(--color-bg-deep);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: inherit;
+}
+
+::selection {
+  background: var(--color-mint);
+  color: var(--color-text-on-mint);
+}
+
+/* ---------- 4. Tipografie ---------- */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+}
+
+h1 {
+  font-size: clamp(var(--fs-2xl), 6vw, var(--fs-4xl));
+  font-weight: 700;
+}
+
+h2 {
+  font-size: clamp(var(--fs-xl), 4vw, var(--fs-3xl));
+}
+
+h3 {
+  font-size: var(--fs-xl);
+}
+
+p {
+  color: var(--color-text-muted);
+  max-width: 65ch;
+}
+
+.eyebrow {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--color-leaf-bright);
+}
+
+/* ---------- 5. Layout — container ---------- */
+.container {
+  width: 100%;
+  max-width: var(--container-max);
+  margin-inline: auto;
+  padding-inline: var(--container-pad);
+}
+
+/* ---------- 6. Butoane ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: var(--fs-base);
+  letter-spacing: 0.01em;
+  padding: var(--space-4) var(--space-6);
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  transition:
+    transform var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out);
+  white-space: nowrap;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn--primary {
+  background: var(--color-mint);
+  color: var(--color-text-on-mint);
+  box-shadow: var(--shadow-glow-mint);
+}
+
+.btn--primary:hover {
+  background: var(--color-mint-soft);
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px rgba(184, 240, 201, 0.4),
+    0 18px 50px rgba(184, 240, 201, 0.28);
+}
+
+.btn--ghost {
+  background: transparent;
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.btn--ghost:hover {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+}
+
+.btn--lg {
+  font-size: var(--fs-md);
+  padding: var(--space-5) var(--space-7);
+}
+
+.btn--xl {
+  font-size: var(--fs-lg);
+  padding: var(--space-5) var(--space-8);
+  font-weight: 700;
+}
+
+.btn__arrow {
+  display: inline-block;
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.btn:hover .btn__arrow {
+  transform: translateX(4px);
+}
+
+/* ---------- 7. Card cu efect de sticlă ---------- */
+.glass {
+  background: var(--color-surface);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+/* ---------- 8. Navbar (reutilizabilă) ---------- */
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-5) 0;
+  position: relative;
+  z-index: 10;
+}
+
+.nav__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-lg);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+}
+
+.nav__brand-mark {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-leaf) 0%, var(--color-leaf-bright) 100%);
+  color: var(--color-bg-deep);
+}
+
+.nav__links {
+  display: flex;
+  gap: var(--space-7);
+  list-style: none;
+}
+
+.nav__link {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  position: relative;
+  padding-block: var(--space-2);
+}
+
+.nav__link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0;
+  height: 1px;
+  background: var(--color-mint);
+  transition: width var(--dur-base) var(--ease-out);
+}
+
+.nav__link:hover,
+.nav__link[aria-current='page'] {
+  color: var(--color-text);
+}
+
+.nav__link:hover::after,
+.nav__link[aria-current='page']::after {
+  width: 100%;
+}
+
+/* ---------- 9. Footer ---------- */
+.footer {
+  border-top: 1px solid var(--color-border-soft);
+  padding-block: var(--space-7);
+  color: var(--color-text-faint);
+  font-size: var(--fs-sm);
+}
+
+.footer__inner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ---------- 10. Utilitare ---------- */
+.text-mint   { color: var(--color-mint); }
+.text-leaf   { color: var(--color-leaf-bright); }
+.text-muted  { color: var(--color-text-muted); }
+.text-center { text-align: center; }
+
+.stack-2 > * + * { margin-top: var(--space-2); }
+.stack-4 > * + * { margin-top: var(--space-4); }
+.stack-5 > * + * { margin-top: var(--space-5); }
+.stack-6 > * + * { margin-top: var(--space-6); }
+.stack-7 > * + * { margin-top: var(--space-7); }
+
+.hidden { display: none; }
+
+/* ---------- 11. Animații de entry ---------- */
+@keyframes fade-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.anim-rise {
+  animation: fade-rise var(--dur-slow) var(--ease-out) both;
+}
+
+.anim-fade {
+  animation: fade-in var(--dur-slow) var(--ease-out) both;
+}
+
+.delay-1 { animation-delay: 100ms; }
+.delay-2 { animation-delay: 240ms; }
+.delay-3 { animation-delay: 380ms; }
+.delay-4 { animation-delay: 520ms; }
+.delay-5 { animation-delay: 680ms; }
+
+/* ---------- 12. Responsive (mobile) ---------- */
+@media (max-width: 720px) {
+  .nav__links {
+    gap: var(--space-5);
+  }
+
+  .nav__link {
+    font-size: var(--fs-xs);
+  }
+
+  .footer__inner {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .nav__links {
+    display: none;   /* simplificat — fără meniu hamburger pentru moment */
+  }
+}

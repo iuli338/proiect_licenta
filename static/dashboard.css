@@ -1,0 +1,469 @@
+/* ============================================================
+   Stiluri specifice dashboard-ului (dashboard.html)
+   Stilurile globale rămân în global_styles.css.
+   Tonalitate: aceeași paletă, dar mai tehnică / mai densă /
+   ușor mai întunecată decât pe pagina home.
+   ============================================================ */
+
+/* ---------- 1. Background ---------- */
+
+.page-dashboard {
+  min-height: 100vh;
+  background-color: var(--color-bg-deep);
+  background-image: url('dashboard_background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Întunecare mai accentuată pentru densitate vizuală pe dashboard */
+.page-dashboard::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.80);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page-dashboard > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ---------- 2. Topbar ---------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(13, 31, 23, 0.78);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid var(--color-border-soft);
+}
+
+.topbar__inner {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-6);
+  padding: var(--space-4) var(--container-pad);
+  max-width: var(--container-max);
+  margin-inline: auto;
+}
+
+/* ----- Brand stânga ----- */
+.topbar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-md);
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-text);
+}
+
+.topbar__brand-mark {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-leaf) 0%, var(--color-leaf-bright) 100%);
+  color: var(--color-bg-deep);
+}
+
+.topbar__brand-mark svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ----- Taburi centru ----- */
+.tabs {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-1);
+  list-style: none;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out);
+  white-space: nowrap;
+}
+
+.tab:hover {
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.tab[aria-selected='true'] {
+  color: var(--color-text);
+  background: var(--color-surface-strong);
+}
+
+.tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: var(--space-3);
+  right: var(--space-3);
+  bottom: 0;
+  height: 2px;
+  background: var(--color-mint);
+  border-radius: 2px;
+}
+
+.tab__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  display: block;
+}
+
+.tab__label {
+  display: inline-block;
+  line-height: 1;
+}
+
+.tab__badge {
+  display: inline-block;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  background: rgba(184, 240, 201, 0.18);
+  color: var(--color-mint);
+  border-radius: var(--radius-sm);
+  margin-left: var(--space-1);
+}
+
+.tab__badge--todo {
+  background: rgba(255, 200, 80, 0.15);
+  color: #ffcc66;
+}
+
+/* ----- Zonă dreapta: status hub + meniu user ----- */
+.topbar__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-pill__led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-faint);
+  flex-shrink: 0;
+}
+
+.status-pill--online .status-pill__led {
+  background: var(--color-mint);
+  box-shadow: 0 0 8px var(--color-mint);
+}
+
+.status-pill--offline .status-pill__led {
+  background: #ef6464;
+  box-shadow: 0 0 6px rgba(239, 100, 100, 0.6);
+}
+
+.status-pill--pending .status-pill__led {
+  background: #ffcc66;
+  box-shadow: 0 0 6px rgba(255, 204, 102, 0.6);
+  animation: pulse-led 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-led {
+  0%, 100% { opacity: 1;   }
+  50%      { opacity: 0.4; }
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--color-border-soft);
+}
+
+.user-menu__name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+}
+
+.user-menu__logout {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-faint);
+  transition: color var(--dur-fast) var(--ease-out),
+              background-color var(--dur-fast) var(--ease-out);
+}
+
+.user-menu__logout:hover {
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.user-menu__logout svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- 3. Conţinut tab ---------- */
+
+.dashboard-main {
+  flex: 1;
+  padding: var(--space-7) var(--container-pad) var(--space-9);
+  max-width: var(--container-max);
+  width: 100%;
+  margin-inline: auto;
+}
+
+.tab-panel {
+  display: none;
+  animation: fade-in var(--dur-base) var(--ease-out);
+}
+
+.tab-panel[data-active='true'] {
+  display: block;
+}
+
+/* ----- Header de tab ----- */
+.tab-header {
+  margin-bottom: var(--space-7);
+}
+
+.tab-header__title {
+  font-family: var(--font-display);
+  font-size: clamp(var(--fs-xl), 3vw, var(--fs-2xl));
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  margin-top: var(--space-2);
+}
+
+.tab-header__lead {
+  margin-top: var(--space-3);
+  font-size: var(--fs-md);
+  color: var(--color-text-muted);
+  max-width: 60ch;
+}
+
+/* ---------- 4. Componente reutilizabile pentru taburi ---------- */
+
+/* ----- Panel: cardul de bază pentru conţinut dashboard ----- */
+.panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.panel + .panel {
+  margin-top: var(--space-5);
+}
+
+.panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.panel__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.panel__subtitle {
+  margin-top: var(--space-1);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+/* ----- Empty state: când nu avem date de afișat ----- */
+.empty-state {
+  padding: var(--space-8) var(--space-5);
+  text-align: center;
+  color: var(--color-text-faint);
+}
+
+.empty-state svg {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto var(--space-4);
+  opacity: 0.5;
+}
+
+.empty-state__title {
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-2);
+}
+
+.empty-state__text {
+  font-size: var(--fs-sm);
+  max-width: 40ch;
+  margin: 0 auto;
+}
+
+/* ----- TODO banner: marchează clar funcţionalităţile WIP ----- */
+.todo-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  background: rgba(255, 204, 102, 0.08);
+  border: 1px solid rgba(255, 204, 102, 0.25);
+  border-radius: var(--radius-md);
+  color: #ffd98a;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+
+.todo-banner svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.todo-banner strong {
+  color: #ffcc66;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: var(--fs-xs);
+  margin-right: var(--space-2);
+}
+
+/* ----- Cod / valori tehnice inline ----- */
+.mono,
+code,
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  color: var(--color-leaf-bright);
+}
+
+/* ---------- 5. Footer dashboard ---------- */
+
+.dashboard-footer {
+  padding: var(--space-5) var(--container-pad);
+  max-width: var(--container-max);
+  width: 100%;
+  margin-inline: auto;
+  border-top: 1px solid var(--color-border-soft);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+}
+
+.dashboard-footer a {
+  color: var(--color-text-muted);
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.dashboard-footer a:hover {
+  color: var(--color-mint);
+}
+
+/* ---------- 6. Responsive ---------- */
+
+@media (max-width: 960px) {
+  .topbar__inner {
+    grid-template-columns: auto auto;
+    grid-template-areas:
+      "brand right"
+      "tabs  tabs";
+    gap: var(--space-3);
+    padding-block: var(--space-3);
+  }
+
+  .topbar__brand { grid-area: brand; }
+  .topbar__right { grid-area: right; }
+  .tabs {
+    grid-area: tabs;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    margin: 0 calc(var(--container-pad) * -1);
+    padding-inline: var(--container-pad);
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+}
+
+@media (max-width: 560px) {
+  .user-menu__name { display: none; }
+
+  .tab {
+    padding: var(--space-3);
+  }
+
+  .tab__label {
+    display: none;
+  }
+
+  .tab[aria-selected='true'] .tab__label {
+    display: inline;
+  }
+}

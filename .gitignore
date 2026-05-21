@@ -1,0 +1,13 @@
+# Configurare locala cu secrete - .env.example ramane versionat
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Stare runtime a aplicatiei
+data/state.json
+data/*.json.tmp

@@ -1,0 +1,275 @@
+/* ============================================================
+   Stiluri specifice paginii Home (index.html)
+   Stilurile globale rămân în global_styles.css.
+   ============================================================ */
+
+/* ----- Background general -----
+   Se încarcă index_background.jpg din acelaşi folder.
+   Dacă fişierul lipseşte, browserul cade automat pe culoarea de mai jos. */
+.page-home {
+  min-height: 100vh;
+  background-color: var(--color-bg-deep);
+  background-image: url('index_background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  position: relative;
+}
+
+/* ----- Întunecare 50% peste background ----- */
+.page-home::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Conținutul rămâne deasupra întunecării */
+.page-home > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ----- HERO ----- */
+.hero {
+  padding-block: var(--space-7) var(--space-9);
+}
+
+.hero__card {
+  position: relative;
+  padding: clamp(var(--space-6), 5vw, var(--space-9));
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.hero__inner {
+  display: block;
+  min-height: 50vh;
+  padding-block: var(--space-4);
+}
+
+.hero__content {
+  max-width: 44rem;
+}
+
+.hero__title {
+  font-size: clamp(2.25rem, 5.2vw, 4.25rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  margin-bottom: var(--space-5);
+}
+
+.hero__title em {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--color-leaf-bright);
+}
+
+.hero__lead {
+  font-size: var(--fs-md);
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  max-width: 32rem;
+  margin-bottom: var(--space-6);
+}
+
+.hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-soft);
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.hero__meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hero__meta-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-mint);
+  box-shadow: 0 0 8px var(--color-mint);
+}
+
+/* ----- SECȚIUNEA CTA "Deschide Dashboard" ----- */
+.cta {
+  padding-block: var(--space-9);
+  text-align: center;
+}
+
+.cta__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+.cta__eyebrow::before,
+.cta__eyebrow::after {
+  content: '';
+  width: 40px;
+  height: 1px;
+  background: var(--color-leaf-bright);
+  opacity: 0.5;
+}
+
+.cta__title {
+  font-size: clamp(1.75rem, 3.5vw, 2.75rem);
+  font-weight: 600;
+  line-height: 1.15;
+  max-width: 24ch;
+  margin: 0 auto var(--space-5);
+}
+
+.cta__description {
+  font-size: var(--fs-md);
+  color: var(--color-text-muted);
+  line-height: 1.65;
+  max-width: 56ch;
+  margin: 0 auto var(--space-8);
+}
+
+.cta__description strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* Containerul butonului cu halou */
+.cta__button-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.cta__button-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: var(--radius-pill);
+  background: radial-gradient(ellipse at center, rgba(184, 240, 201, 0.25) 0%, transparent 70%);
+  z-index: -1;
+  animation: pulse 3.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1);   opacity: 0.6; }
+  50%      { transform: scale(1.08); opacity: 1; }
+}
+
+/* Note suplimentare sub buton */
+.cta__hints {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-6);
+  margin-top: var(--space-7);
+  font-size: var(--fs-sm);
+  color: var(--color-text-faint);
+}
+
+.cta__hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.cta__hint svg {
+  width: 18px;
+  height: 18px;
+  color: var(--color-leaf-bright);
+  flex-shrink: 0;
+}
+
+/* ----- SECȚIUNEA Funcționalități ----- */
+.features {
+  padding-block: var(--space-9);
+}
+
+.features__header {
+  max-width: 38rem;
+  margin-bottom: var(--space-8);
+}
+
+.features__header h2 {
+  margin-top: var(--space-3);
+}
+
+.features__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-5);
+}
+
+.feature-card {
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  transition: transform var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-out),
+              background-color var(--dur-base) var(--ease-out);
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--color-border);
+  background: var(--color-surface-strong);
+}
+
+.feature-card__icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: rgba(184, 240, 201, 0.12);
+  color: var(--color-mint);
+  margin-bottom: var(--space-4);
+}
+
+.feature-card__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.feature-card__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+  letter-spacing: -0.01em;
+}
+
+.feature-card__text {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.55;
+}
+
+/* ----- Responsive ----- */
+@media (max-width: 560px) {
+  .hero__card {
+    border-radius: var(--radius-lg);
+  }
+
+  .hero__meta {
+    gap: var(--space-3);
+  }
+
+  .cta__eyebrow::before,
+  .cta__eyebrow::after {
+    width: 24px;
+  }
+}

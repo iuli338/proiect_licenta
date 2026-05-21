@@ -1,0 +1,61 @@
+/* ============================================================
+   Dropwise — temă DARK pentru dashboard
+   ============================================================
+
+   Versiunea întunecată a stilizării globale, aplicată DOAR pe
+   dashboard. Funcţionează prin suprascrierea design token-urilor
+   de culoare în scope-ul `.page-dashboard`.
+
+   Restul (tipografie, spaţiere, forme, durate) rămâne moştenit
+   din global_styles.css — aceeaşi identitate, doar mai întunecată.
+
+   Se încarcă DUPĂ global_styles.css şi dashboard.css ca să poată
+   suprascrie variabilele.
+   ============================================================ */
+
+.page-dashboard {
+  /* ---- Fundaluri: mai negre, mai puţin verzi ---- */
+  --color-bg-deep:     #060e0a;   /* aproape negru */
+  --color-bg-base:     #0a1610;   /* fundal de bază mai întunecat */
+  --color-bg-elevated: #10211a;   /* carduri ridicate */
+
+  /* ---- Suprafeţe de sticlă: mai discrete pe fundal întunecat ---- */
+  --color-surface:        rgba(255, 255, 255, 0.05);
+  --color-surface-strong: rgba(255, 255, 255, 0.10);
+  --color-border:         rgba(255, 255, 255, 0.14);
+  --color-border-soft:    rgba(255, 255, 255, 0.07);
+
+  /* ---- Verzi de accent: uşor temperaţi pentru contrast pe negru ---- */
+  --color-leaf-dark:   #234734;
+  --color-leaf:        #3f7a52;
+  --color-leaf-bright: #6fbf8c;
+  /* mentă şi mint-soft rămân — sunt accentul principal şi trebuie
+     să iasă puternic în evidenţă pe fundalul mai întunecat. */
+
+  /* ---- Text: contrast crescut faţă de fundalul mai negru ---- */
+  --color-text:        #f6faf7;
+  --color-text-muted:  rgba(246, 250, 247, 0.72);
+  --color-text-faint:  rgba(246, 250, 247, 0.45);
+  --color-text-on-mint: #060e0a;
+
+  /* ---- Umbre: mai adânci pe temă dark ---- */
+  --shadow-glow-mint:
+    0 0 0 1px rgba(184, 240, 201, 0.22),
+    0 14px 40px rgba(0, 0, 0, 0.55);
+}
+
+/* Fundalul paginii foloseşte noul ton întunecat. */
+.page-dashboard {
+  background-color: var(--color-bg-deep);
+}
+
+/* Overlay-ul de întunecare: mai discret acum, fiindcă întunecarea
+   reală e dată de token-urile temei, nu de un strat negru opac. */
+.page-dashboard::before {
+  background-color: rgba(0, 0, 0, 0.80);
+}
+
+/* Topbar-ul — armonizat cu noul fundal mai negru. */
+.page-dashboard .topbar {
+  background: rgba(6, 14, 10, 0.82);
+}

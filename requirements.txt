@@ -1,0 +1,7 @@
+# Dropwise - Python dependencies
+# Install:  pip install -r requirements.txt
+
+Flask>=3.0
+requests>=2.31
+bleak>=0.22
+python-dotenv>=1.0

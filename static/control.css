@@ -1,0 +1,349 @@
+/* ============================================================
+   Dropwise — stiluri pentru tab-ul "Control manual"
+   Toggle GPIO (pompă/valve) + udare per port cu diagramă.
+   ============================================================ */
+
+/* ---------- 1. Banner hub offline ---------- */
+
+.control-offline {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+  background: rgba(239, 100, 100, 0.10);
+  border-color: rgba(239, 100, 100, 0.30);
+  color: #ffb4b4;
+  font-size: var(--fs-sm);
+  padding: var(--space-4) var(--space-5);
+}
+
+.control-offline .status-pill__led {
+  background: #ef6464;
+  box-shadow: 0 0 6px rgba(239, 100, 100, 0.6);
+}
+
+/* Când hub-ul e offline, blocăm întreaga zonă de comenzi. */
+#control-flow[data-disabled='true'] {
+  opacity: 0.5;
+  pointer-events: none;
+  filter: saturate(0.6);
+}
+
+/* ---------- 2. Toggle GPIO (pompă + valve) ---------- */
+
+.gpio-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-4);
+}
+
+.gpio-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+}
+
+.gpio-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: var(--color-border);
+}
+
+.gpio-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.gpio-btn__icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+}
+
+.gpio-btn__icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.gpio-btn__label {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+
+.gpio-btn__state {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+/* Stare PORNIT — fundal mentă, identitate clară */
+.gpio-btn[data-state='on'] {
+  background: var(--color-mint);
+  border-color: var(--color-mint);
+  color: var(--color-text-on-mint);
+}
+
+.gpio-btn[data-state='on'] .gpio-btn__state {
+  color: var(--color-text-on-mint);
+}
+
+/* Stare în aşteptare — comanda a fost trimisă, aşteptăm răspuns */
+.gpio-btn[data-state='pending'] {
+  background: rgba(255, 204, 102, 0.14);
+  border-color: rgba(255, 204, 102, 0.5);
+  color: #ffd98a;
+}
+
+.gpio-btn[data-state='pending'] .gpio-btn__state {
+  color: #ffd98a;
+}
+
+/* ---------- 3. Diagrama hidraulică ---------- */
+
+.hydro-diagram {
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  padding: var(--space-5);
+  margin-bottom: var(--space-5);
+}
+
+.hydro-diagram svg {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  margin-inline: auto;
+}
+
+/* Conductele circuitului */
+.hydro-pipe {
+  stroke: var(--color-border);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+/* Nodurile (pompă + valve) — inactive implicit */
+.hydro-node {
+  fill: var(--color-surface-strong);
+  stroke: var(--color-text-faint);
+  stroke-width: 2;
+  transition: fill var(--dur-base) var(--ease-out),
+              stroke var(--dur-base) var(--ease-out);
+}
+
+/* Nod activ — se aprinde mentă */
+.hydro-node[data-active='true'] {
+  fill: var(--color-mint);
+  stroke: var(--color-mint);
+}
+
+.hydro-label {
+  fill: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* Eticheta porturilor sub diagramă */
+.hydro-port {
+  fill: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ---------- 3b. Dialog disclaimer (modal) ---------- */
+
+/* Elementul nativ <dialog>. Resetăm stilul implicit al browserului.
+   margin:auto + inset:0 îl centrează pe ecran chiar dacă un reset
+   global (* { margin: 0 }) ar fi suprascris centrarea implicită. */
+.modal {
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: var(--color-text);
+  max-width: 30rem;
+  width: calc(100% - var(--space-6));
+  margin: auto;
+  inset: 0;
+}
+
+/* Fundalul din spatele dialogului — mai întunecat */
+.modal::backdrop {
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.modal__card {
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7) var(--space-6);
+  text-align: center;
+}
+
+.modal__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto var(--space-5);
+  border-radius: 50%;
+}
+
+.modal__icon svg {
+  width: 28px;
+  height: 28px;
+}
+
+/* Variantă de avertizare — galben */
+.modal__icon--warn {
+  background: rgba(255, 204, 102, 0.14);
+  color: #ffcc66;
+}
+
+.modal__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+}
+
+.modal__text {
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
+}
+
+.modal__text strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* Checkbox-ul de confirmare a riscului */
+.modal__check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: left;
+  margin: var(--space-5) 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.modal__check input {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  accent-color: var(--color-mint);
+  cursor: pointer;
+}
+
+.modal__actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* Butoanele împart egal lăţimea dialogului, aliniate orizontal. */
+.modal__actions .btn {
+  flex: 1;
+  padding-inline: var(--space-4);
+}
+
+/* Butonul de confirmare dezactivat cât timp riscul nu e bifat */
+.modal__actions .btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* ---------- 4. Butoane udare per port ---------- */
+
+.water-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.water-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out);
+}
+
+.water-btn:hover:not(:disabled) {
+  border-color: var(--color-border);
+}
+
+.water-btn__port {
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+
+.water-btn__state {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+/* Udare activă pe acest port */
+.water-btn[data-state='on'] {
+  background: var(--color-mint);
+  border-color: var(--color-mint);
+  color: var(--color-text-on-mint);
+}
+
+.water-btn[data-state='on'] .water-btn__state {
+  color: var(--color-text-on-mint);
+}
+
+/* Comandă în aşteptare */
+.water-btn[data-state='pending'] {
+  background: rgba(255, 204, 102, 0.14);
+  border-color: rgba(255, 204, 102, 0.5);
+  color: #ffd98a;
+}
+
+.water-btn[data-state='pending'] .water-btn__state {
+  color: #ffd98a;
+}
+
+/* Indisponibil — port neconfirmat sau alt port se udă */
+.water-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

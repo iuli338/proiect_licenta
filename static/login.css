@@ -1,0 +1,175 @@
+/* ============================================================
+   Stiluri specifice paginii de login (login.html)
+   Stilurile globale rămân în global_styles.css.
+   ============================================================ */
+
+/* ----- Background general -----
+   Se încarcă login_background.jpg din folderul static.
+   Dacă fişierul lipseşte, browserul cade automat pe culoarea de mai jos. */
+.page-login {
+  min-height: 100vh;
+  background-color: var(--color-bg-deep);
+  background-image: url('login_background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+}
+
+/* Întunecare 50% peste background, pentru contrast cu cardul */
+.page-login::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.page-login > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ----- Cardul de login ----- */
+.login-card {
+  width: 100%;
+  max-width: 26rem;
+  padding: clamp(var(--space-6), 5vw, var(--space-8));
+}
+
+/* ----- Brand-ul sus în card ----- */
+.login-card__brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-7);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-lg);
+  letter-spacing: var(--tracking-tight);
+}
+
+.login-card__brand-mark {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--color-leaf) 0%, var(--color-leaf-bright) 100%);
+  color: var(--color-bg-deep);
+}
+
+/* ----- Titlu + lead ----- */
+.login-card__title {
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: var(--space-2);
+  letter-spacing: -0.01em;
+}
+
+.login-card__lead {
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  margin: 0 auto var(--space-7);
+  max-width: 22rem;
+}
+
+/* ----- Mesaj de eroare ----- */
+.login-card__error {
+  background: rgba(239, 100, 100, 0.12);
+  border: 1px solid rgba(239, 100, 100, 0.35);
+  color: #ffd2d2;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  text-align: center;
+  margin-bottom: var(--space-5);
+}
+
+/* ----- Formularul ----- */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.field__label {
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.field__input {
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+  outline: none;
+  transition:
+    border-color var(--dur-base) var(--ease-out),
+    background-color var(--dur-base) var(--ease-out),
+    box-shadow var(--dur-base) var(--ease-out);
+}
+
+.field__input::placeholder {
+  color: var(--color-text-faint);
+}
+
+.field__input:hover {
+  border-color: var(--color-border);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.field__input:focus {
+  border-color: var(--color-mint);
+  background: rgba(255, 255, 255, 0.10);
+  box-shadow: 0 0 0 3px rgba(184, 240, 201, 0.15);
+}
+
+/* ----- Butonul de submit ----- */
+.login-form__submit {
+  margin-top: var(--space-3);
+  width: 100%;
+}
+
+/* ----- Hint jos ----- */
+.login-card__hint {
+  margin-top: var(--space-7);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--color-border-soft);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+  line-height: 1.5;
+}
+
+.login-card__hint svg {
+  width: 16px;
+  height: 16px;
+  color: var(--color-leaf-bright);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
