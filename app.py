@@ -41,6 +41,7 @@ except ImportError:
     requests = None
 
 import ble_provisioning as ble  # modul de detecţie BLE + provisioning
+import node_config as nodes      # cataloage plante/sol + config noduri
 
 
 # ---------------------------------------------------------------- config
@@ -79,8 +80,10 @@ DEFAULT_STATE = {
         "ssid": None,
     },
     "nodes": {
-        # Configuraţie per nod (cheia = port: 1, 2, 3)
-        # Exemplu: "1": { "plant_type": "ficus", "soil_type": "universal", ... }
+        # Configuraţie per NOD, cheia = numele nodului ("P1", "P2", "P3").
+        # Configuraţia aparţine nodului, nu portului — nodul poate fi mutat
+        # pe alt slot fizic şi îşi păstrează planta/solul/culoarea.
+        # Exemplu: "P1": { "plant": {...}, "soil": {...}, "color": "mint", ... }
     },
     "logs": [],   # loguri persistente (TODO: rotire)
 }
@@ -277,16 +280,71 @@ def api_setup_connect():
 
 # ---------------------------------------------------------------- API: Monitorizare (proxy către hub)
 
+def _mock_hub_status() -> dict:
+    """
+    Stare simulată a hub-ului pentru DROPWISE_HUB_MODE=mock.
+    Trei porturi cu noduri conectate; fiecare port e "configured" dacă
+    există configuraţie salvată pentru el în state.json.
+
+    Datele de senzori (umiditate sol, temperatură etc.) sunt încă TODO —
+    vor veni de la nod prin hub când firmware-ul de transmisie e gata.
+    """
+    state = load_state()
+    # Pentru test, portul 3 este lăsat gol (niciun nod conectat).
+    EMPTY_PORTS = {3}
+    ports = []
+    for p in (1, 2, 3):
+        if p in EMPTY_PORTS:
+            # Slot fizic gol — niciun nod conectat.
+            ports.append({
+                "port": p,
+                "physical": False,
+                "confirmed": False,
+                "name": None,
+                "valve": False,
+                "configured": False,
+                "config": None,
+                "sensors": None,
+            })
+            continue
+        # În mock, nodul de pe portul p se numeşte "P<p>" — dar cheia de
+        # configurare e NUMELE nodului, nu portul.
+        node_name = f"P{p}"
+        cfg = state["nodes"].get(node_name)
+        ports.append({
+            "port": p,                   # slotul fizic curent
+            "physical": True,            # nod prezent fizic
+            "confirmed": True,           # nod identificat de hub
+            "name": node_name,           # identitatea nodului
+            "valve": False,
+            "configured": bool(cfg and cfg.get("configured")),
+            # Configuraţia completă, inline — evită un fetch separat per card.
+            "config": cfg or None,
+            # TODO(live): date reale de senzori de la nod
+            "sensors": None,
+        })
+    return {
+        "ports": ports,
+        "channel": 6,
+        "pump": False,
+        "wateringPort": -1,
+        "mock": True,
+    }
+
+
 @app.route("/api/hub/status")
 @login_required
 def api_hub_status():
     """
-    Proxy către endpoint-ul /status al hub-ului ESP32.
-    Returnează starea curentă: porturi, valve, pompă, canal WiFi.
+    Starea hub-ului. În mod 'mock' (DROPWISE_HUB_MODE) returnează o stare
+    simulată; în 'real' face proxy către /status al ESP32.
     """
     state = load_state()
-    hub_ip = state["hub"].get("ip")
 
+    if nodes.get_hub_mode() == "mock":
+        return jsonify({"online": True, "data": _mock_hub_status()})
+
+    hub_ip = state["hub"].get("ip")
     if not hub_ip:
         return jsonify({"online": False, "error": "hub_ip_not_set"}), 200
 
@@ -297,6 +355,12 @@ def api_hub_status():
         r = requests.get(f"http://{hub_ip}/status", timeout=1.5)
         r.raise_for_status()
         data = r.json()
+        # Îmbogăţim porturile cu starea de configurare din state.json.
+        # Cheia e NUMELE nodului ("name"), nu portul — config urmează nodul.
+        for port in data.get("ports", []):
+            cfg = state["nodes"].get(port.get("name"))
+            port["configured"] = bool(cfg and cfg.get("configured"))
+            port["config"] = cfg or None
         return jsonify({"online": True, "data": data})
     except requests.RequestException as e:
         return jsonify({"online": False, "error": str(e)}), 200
@@ -354,32 +418,93 @@ def api_hub_water(action, port):
 
 # ---------------------------------------------------------------- API: Configurare nod
 
-@app.route("/api/node/<int:port>", methods=["GET"])
+@app.route("/api/catalog")
 @login_required
-def api_node_get(port):
-    """Returnează configuraţia salvată pentru un nod (sau {} dacă nu există)."""
-    if port not in (1, 2, 3):
-        return jsonify({"error": "port invalid"}), 400
-    state = load_state()
-    return jsonify(state["nodes"].get(str(port), {}))
+def api_catalog():
+    """Cataloagele folosite de wizardul de configurare a nodurilor:
+    plante, tipuri de sol, culori. Citite dinamic din data/catalog.json —
+    editabile fără modificări de cod."""
+    catalog = nodes.load_catalog()
+    return jsonify({
+        "plants": catalog["plants"],
+        "soils": catalog["soils"],
+        "colors": catalog["colors"],
+        "water_need_levels": list(nodes.WATER_NEED_LEVELS),
+        "retention_levels": list(nodes.RETENTION_LEVELS),
+    })
 
 
-@app.route("/api/node/<int:port>", methods=["POST"])
+# Configuraţia se face pe NOD (identificat prin nume: P1/P2/P3), nu pe port.
+# Numele de nod valide — deocamdată fixe; în live vor veni din /status.
+VALID_NODE_NAMES = ("P1", "P2", "P3")
+
+
+@app.route("/api/node/<node_name>", methods=["GET"])
 @login_required
-def api_node_save(port):
-    """
-    Salvează configuraţia unui nod.
-    TODO: validare câmpuri (tip plantă, tip sol, parametri regulator).
-    TODO: trimitere configuraţie către hub (care va propaga la nod).
-    """
-    if port not in (1, 2, 3):
-        return jsonify({"error": "port invalid"}), 400
-
-    data = request.get_json(silent=True) or {}
+def api_node_get(node_name):
+    """Returnează configuraţia salvată pentru un nod (sau {} dacă lipseşte)."""
+    if node_name not in VALID_NODE_NAMES:
+        return jsonify({"error": "nod invalid"}), 400
     state = load_state()
-    state["nodes"][str(port)] = data
+    return jsonify(state["nodes"].get(node_name, {}))
+
+
+@app.route("/api/node/<node_name>/preview", methods=["POST"])
+@login_required
+def api_node_preview(node_name):
+    """
+    Validează alegerile din wizard şi întoarce parametrii de regulator
+    derivaţi + explicaţiile lor — fără a salva nimic. Folosit la pasul
+    de sumar al wizardului.
+    """
+    if node_name not in VALID_NODE_NAMES:
+        return jsonify({"error": "nod invalid"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    config, err = nodes.build_node_config(payload)
+    if err:
+        return jsonify({"error": err}), 400
+
+    return jsonify({
+        "regulator": config["regulator"],
+        "explanation": nodes.explain_regulator(config["regulator"]),
+    })
+
+
+@app.route("/api/node/<node_name>", methods=["POST"])
+@login_required
+def api_node_save(node_name):
+    """
+    Validează şi salvează configuraţia unui nod, apoi porneşte trimiterea
+    ei către ESP32. Returnează un job_id de urmărit prin polling.
+    """
+    if node_name not in VALID_NODE_NAMES:
+        return jsonify({"error": "nod invalid"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    config, err = nodes.build_node_config(payload)
+    if err:
+        return jsonify({"error": err}), 400
+
+    # Salvăm în state.json sub numele nodului — sursa de adevăr a dashboard-ului.
+    state = load_state()
+    state["nodes"][node_name] = config
     save_state(state)
-    return jsonify({"ok": True, "port": port, "config": data})
+
+    # Pornim trimiterea către ESP32 (mock sau real).
+    job = nodes.start_config_send(node_name, config, state["hub"].get("ip"))
+    return jsonify({"ok": True, "node": node_name, "config": config,
+                    "job": job.to_dict()})
+
+
+@app.route("/api/node/job/<job_id>", methods=["GET"])
+@login_required
+def api_node_job(job_id):
+    """Starea unui job de trimitere a configuraţiei către nod (polling)."""
+    job = nodes.get_config_job(job_id)
+    if job is None:
+        return jsonify({"error": "job inexistent"}), 404
+    return jsonify(job.to_dict())
 
 
 # ---------------------------------------------------------------- main
@@ -401,6 +526,8 @@ if __name__ == "__main__":
     print(" -> http://127.0.0.1:" + str(port))
     print(" -> login: admin / admin")
     print(" -> mod BLE: " + ble.get_mode()
-          + "  (seteaza DROPWISE_BLE_MODE=real in .env pentru hardware)")
+          + "  (DROPWISE_BLE_MODE)")
+    print(" -> mod HUB: " + nodes.get_hub_mode()
+          + "  (DROPWISE_HUB_MODE)")
     print("=" * 60)
     app.run(host="0.0.0.0", port=port, debug=True)

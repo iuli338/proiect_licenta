@@ -1,0 +1,114 @@
+{
+  "_comment": "Catalog Dropwise — plante, soluri, culori. Editabil: adauga sau scoate intrari, interfata le preia automat. water_need / retention: scazut | mediu | ridicat.",
+  "plants": [
+    {
+      "id": "ficus",
+      "name": "Ficus",
+      "water_need": "mediu"
+    },
+    {
+      "id": "monstera",
+      "name": "Monstera",
+      "water_need": "mediu"
+    },
+    {
+      "id": "sansevieria",
+      "name": "Sansevieria",
+      "water_need": "scazut"
+    },
+    {
+      "id": "feriga",
+      "name": "Ferigă",
+      "water_need": "ridicat"
+    },
+    {
+      "id": "cactus",
+      "name": "Cactus / Suculentă",
+      "water_need": "scazut"
+    },
+    {
+      "id": "pothos",
+      "name": "Pothos",
+      "water_need": "mediu"
+    },
+    {
+      "id": "calathea",
+      "name": "Calathea",
+      "water_need": "ridicat"
+    },
+    {
+      "id": "anthurium",
+      "name": "Anthurium",
+      "water_need": "mediu"
+    }
+  ],
+  "soils": [
+    {
+      "id": "universal",
+      "name": "Sol universal",
+      "retention": "mediu"
+    },
+    {
+      "id": "drenant",
+      "name": "Substrat drenant",
+      "retention": "scazut"
+    },
+    {
+      "id": "cactus",
+      "name": "Amestec pentru cactuşi",
+      "retention": "scazut"
+    },
+    {
+      "id": "turba",
+      "name": "Substrat pe bază de turbă",
+      "retention": "ridicat"
+    },
+    {
+      "id": "argilos",
+      "name": "Sol argilos",
+      "retention": "ridicat"
+    }
+  ],
+  "colors": [
+    {
+      "id": "mint",
+      "name": "Mentă",
+      "accent": "152 60% 70%"
+    },
+    {
+      "id": "ocean",
+      "name": "Oceanic",
+      "accent": "195 65% 62%"
+    },
+    {
+      "id": "lavar",
+      "name": "Lavandă",
+      "accent": "260 55% 72%"
+    },
+    {
+      "id": "amber",
+      "name": "Chihlimbar",
+      "accent": "38 80% 62%"
+    },
+    {
+      "id": "coral",
+      "name": "Coral",
+      "accent": "5 75% 68%"
+    },
+    {
+      "id": "lime",
+      "name": "Lămâie verde",
+      "accent": "95 60% 62%"
+    },
+    {
+      "id": "roz",
+      "name": "Roz",
+      "accent": "330 70% 74%"
+    },
+    {
+      "id": "soare",
+      "name": "Galben soare",
+      "accent": "50 85% 64%"
+    }
+  ]
+}
