@@ -69,6 +69,22 @@
   color: var(--color-text);
 }
 
+/* Blocul de text: "Dropwise" cu "DASHBOARD" dedesubt */
+.topbar__brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.topbar__brand-sub {
+  font-family: var(--font-body);
+  font-size: 0.625rem;          /* 10px — mai mic decât numele */
+  font-weight: 600;
+  letter-spacing: var(--tracking-wider);
+  color: var(--color-text-faint);
+  margin-top: 2px;
+}
+
 .topbar__brand-mark {
   width: 32px;
   height: 32px;

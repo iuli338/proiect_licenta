@@ -36,9 +36,20 @@
 
   // ---------- Helpers ----------
 
-  function setControlsDisabled(disabled) {
+  /**
+   * Activează / dezactivează zona de comenzi.
+   * @param disabled  true => butoanele sunt blocate
+   * @param showBanner true => afişează şi bannerul "hub offline".
+   *        La intrarea pe tab blocăm comenzile dar NU arătăm bannerul,
+   *        ca să nu apară un flash înainte de primul răspuns de polling.
+   *
+   * Orice apel ascunde bannerul de loading — el e vizibil doar până la
+   * primul răspuns de polling.
+   */
+  function setControlsDisabled(disabled, showBanner) {
     el.flow.dataset.disabled = disabled ? 'true' : 'false';
-    el.offline.hidden = !disabled;
+    el.offline.hidden = !(disabled && showBanner);
+    el.loading.hidden = true;
   }
 
   /** Aplică o stare vizuală ('on' | 'off' | 'pending') unui buton. */
@@ -111,14 +122,16 @@
       const j = await r.json();
 
       if (!j.online || !j.data) {
-        setControlsDisabled(true);
+        // Hub confirmat offline => blocăm + afişăm bannerul.
+        setControlsDisabled(true, true);
         return;
       }
 
-      setControlsDisabled(false);
+      // Hub online => deblocăm comenzile, ascundem bannerul.
+      setControlsDisabled(false, false);
       render(j.data);
     } catch (e) {
-      setControlsDisabled(true);
+      setControlsDisabled(true, true);
     }
   }
 
@@ -237,6 +250,11 @@
 
   function startPolling() {
     if (pollTimer) return;
+    // Stare iniţială: comenzi blocate, banner de loading vizibil,
+    // banner offline ascuns — până vine primul răspuns de la poll().
+    el.flow.dataset.disabled = 'true';
+    el.loading.hidden = false;
+    el.offline.hidden = true;
     poll();
     pollTimer = setInterval(poll, POLL_MS);
   }
@@ -257,6 +275,7 @@
     el = {
       flow: document.getElementById('control-flow'),
       offline: document.getElementById('control-offline'),
+      loading: document.getElementById('control-loading'),
       waterStatus: document.getElementById('water-status'),
       hydroPump: document.getElementById('hydro-pump'),
       hydroValve1: document.getElementById('hydro-valve1'),

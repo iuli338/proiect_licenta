@@ -26,7 +26,10 @@
             <path d="M4 4 L20 20"/>
           </svg>
         </span>
-        Dropwise
+        <span class="topbar__brand-text">
+          Dropwise
+          <span class="topbar__brand-sub">DASHBOARD</span>
+        </span>
       </a>
 
       <!-- Taburi centru -->
@@ -383,13 +386,23 @@
         </p>
       </header>
 
+      {# Banner de loading — vizibil până la primul răspuns de polling #}
+      <div id="control-loading" class="control-loading panel">
+        <span class="control-loading__dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+        <span>Se verifică starea hub-ului…</span>
+      </div>
+
       {# Banner — vizibil cât timp hub-ul nu răspunde #}
       <div id="control-offline" class="control-offline panel" hidden>
         <span class="status-pill__led" aria-hidden="true"></span>
         <span>Hub-ul nu răspunde. Comenzile sunt indisponibile.</span>
       </div>
 
-      <div id="control-flow">
+      {# Pornit dezactivat — comenzile se deblochează abia după ce
+         polling-ul confirmă hub-ul online. #}
+      <div id="control-flow" data-disabled="true">
 
         {# ---- Secţiunea A: Toggle GPIO direct ---- #}
         <div class="panel">
