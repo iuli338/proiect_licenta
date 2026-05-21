@@ -230,8 +230,23 @@
 
 .features__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  /* 4 carduri pe un rând pe ecrane largi */
+  grid-template-columns: repeat(4, 1fr);
   gap: var(--space-5);
+}
+
+/* Sub ~900px: grid 2×2 */
+@media (max-width: 900px) {
+  .features__grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Sub ~560px: o singură coloană */
+@media (max-width: 560px) {
+  .features__grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .feature-card {

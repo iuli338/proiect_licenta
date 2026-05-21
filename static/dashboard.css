@@ -444,7 +444,26 @@ kbd {
 
 /* ---------- 6. Responsive ---------- */
 
-@media (max-width: 960px) {
+/* Lăţimi medii (fereastra windowed ~900-1100px): topbar-ul rămâne pe un
+   rând, dar strângem gap-urile şi padding-ul ca taburile să încapă. */
+@media (max-width: 1100px) {
+  .topbar__inner {
+    gap: var(--space-4);
+  }
+
+  .tab {
+    padding: var(--space-3) var(--space-3);
+    gap: var(--space-1);
+  }
+
+  .dashboard-main {
+    padding-inline: var(--space-5);
+  }
+}
+
+/* Sub 760px: brand+status pe primul rând, taburile pe al doilea,
+   scrollabile orizontal dacă e nevoie. */
+@media (max-width: 760px) {
   .topbar__inner {
     grid-template-columns: auto auto;
     grid-template-areas:
