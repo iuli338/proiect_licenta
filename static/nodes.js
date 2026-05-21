@@ -94,7 +94,6 @@
       seen.add(String(p.port));
       let card = grid.querySelector(
         '.node-card[data-port="' + p.port + '"]');
-      const connected = p.physical && p.confirmed;
 
       if (!card) {
         card = document.createElement('article');
@@ -103,9 +102,15 @@
         buildCardSkeleton(card);
         grid.appendChild(card);
       }
-      if (connected) {
+
+      if (p.physical && p.confirmed) {
+        // Nod identificat de hub.
         updateCard(card, p);
+      } else if (p.physical) {
+        // Nod detectat fizic, dar neconfirmat — handshake în curs.
+        updateHandshakeCard(card, p);
       } else {
+        // Slot gol.
         updateEmptyCard(card, p);
       }
     });
@@ -131,6 +136,27 @@
       card.querySelector('.node-card__soil').hidden = true;
       card.querySelector('.node-card__sensors').hidden = true;
       card.querySelector('.node-card__cfg').hidden = true;
+      card.querySelector('.node-card__handshake').hidden = true;
+      card.style.removeProperty('--node-accent');
+    }
+  }
+
+  /** Card în handshake — nod detectat, se aşteaptă confirmarea hub-ului. */
+  function updateHandshakeCard(card, port) {
+    if (card.dataset.state !== 'handshake') {
+      card.dataset.state = 'handshake';
+      card.querySelector('.node-card__title').textContent =
+        'Port ' + port.port;
+      card.querySelector('.node-card__badge').hidden = true;
+      card.querySelector('.node-card__menu').hidden = true;
+      card.querySelector('.node-card__media').hidden = true;
+      card.querySelector('.node-card__hint').hidden = true;
+      card.querySelector('.node-card__plant').hidden = true;
+      card.querySelector('.node-card__soil').hidden = true;
+      card.querySelector('.node-card__sensors').hidden = true;
+      card.querySelector('.node-card__cfg').hidden = true;
+      // "Conectare ..." cu punctele animate, în centru.
+      card.querySelector('.node-card__handshake').hidden = false;
       card.style.removeProperty('--node-accent');
     }
   }
@@ -168,7 +194,13 @@
       <p class="node-card__plant"></p>
       <p class="node-card__soil"></p>
       <div class="node-card__sensors"></div>
-      <button type="button" class="btn btn--primary node-card__cfg"></button>`;
+      <button type="button" class="btn btn--primary node-card__cfg"></button>
+      <div class="node-card__handshake" hidden>
+        <span>Conectare</span>
+        <span class="node-card__dots" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </span>
+      </div>`;
 
     // Butonul mare "Configurează" — vizibil doar pe nodurile neconfigurate.
     card.querySelector('.node-card__cfg').addEventListener('click', () => {
@@ -217,9 +249,11 @@
     const menu  = card.querySelector('.node-card__menu');
     const media = card.querySelector('.node-card__media');
     const img   = card.querySelector('.node-card__img');
+    const hand  = card.querySelector('.node-card__handshake');
 
     // Numele nodului — citit de butoanele de configurare din card.
     card.dataset.node = port.name;
+    hand.hidden = true;   // nod confirmat — fără indicator de handshake
 
     // Rândul de titlu: "Port X · PY".
     const titleTxt = 'Port ' + port.port + '  ·  ' + port.name;

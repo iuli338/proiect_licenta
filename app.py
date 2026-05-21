@@ -280,11 +280,22 @@ def api_setup_connect():
 
 # ---------------------------------------------------------------- API: Monitorizare (proxy către hub)
 
+import time as _time
+
+# Momentul pornirii serverului — folosit de mock pentru a simula handshake-ul
+# nodurilor (detectate fizic, dar neconfirmate încă) la prima deschidere.
+_MOCK_START = _time.time()
+# Cât durează handshake-ul simulat (secunde) de la pornirea serverului.
+_MOCK_HANDSHAKE_S = 15.0
+
+
 def _mock_hub_status() -> dict:
     """
     Stare simulată a hub-ului pentru DROPWISE_HUB_MODE=mock.
-    Trei porturi cu noduri conectate; fiecare port e "configured" dacă
-    există configuraţie salvată pentru el în state.json.
+
+    Pentru test, la prima deschidere a serverului porturile 1 şi 2 sunt în
+    handshake (physical=true, confirmed=false) timp de câteva secunde, apoi
+    devin conectate. Portul 3 rămâne gol.
 
     Datele de senzori (umiditate sol, temperatură etc.) sunt încă TODO —
     vor veni de la nod prin hub când firmware-ul de transmisie e gata.
@@ -292,6 +303,9 @@ def _mock_hub_status() -> dict:
     state = load_state()
     # Pentru test, portul 3 este lăsat gol (niciun nod conectat).
     EMPTY_PORTS = {3}
+    # Porturi în handshake — doar în primele secunde după pornirea serverului.
+    in_handshake = (_time.time() - _MOCK_START) < _MOCK_HANDSHAKE_S
+    HANDSHAKE_PORTS = {1, 2} if in_handshake else set()
     ports = []
     for p in (1, 2, 3):
         if p in EMPTY_PORTS:
@@ -300,6 +314,19 @@ def _mock_hub_status() -> dict:
                 "port": p,
                 "physical": False,
                 "confirmed": False,
+                "name": None,
+                "valve": False,
+                "configured": False,
+                "config": None,
+                "sensors": None,
+            })
+            continue
+        if p in HANDSHAKE_PORTS:
+            # Nod detectat fizic, dar încă neconfirmat — handshake în curs.
+            ports.append({
+                "port": p,
+                "physical": True,
+                "confirmed": False,      # handshake-ul nu s-a încheiat
                 "name": None,
                 "valve": False,
                 "configured": False,
