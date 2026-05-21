@@ -45,7 +45,19 @@ import ble_provisioning as ble  # modul de detecţie BLE + provisioning
 
 # ---------------------------------------------------------------- config
 
-BASE_DIR  = Path(__file__).resolve().parent
+import sys
+
+# Sub PyInstaller (.exe) căile diferă:
+#   - resursele bundle-uite (templates, static) stau în sys._MEIPASS
+#   - datele care trebuie să persiste (state.json, .env) stau lângă .exe
+# La rulare normală cu Python, ambele sunt folderul scriptului.
+if getattr(sys, "frozen", False):
+    BUNDLE_DIR = Path(sys._MEIPASS)            # resurse read-only
+    BASE_DIR   = Path(sys.executable).parent   # lângă .exe
+else:
+    BUNDLE_DIR = Path(__file__).resolve().parent
+    BASE_DIR   = BUNDLE_DIR
+
 DATA_DIR  = BASE_DIR / "data"
 STATE_FILE = DATA_DIR / "state.json"
 
@@ -76,7 +88,9 @@ DEFAULT_STATE = {
 
 # ---------------------------------------------------------------- app
 
-app = Flask(__name__, static_folder="static", template_folder="templates")
+app = Flask(__name__,
+            static_folder=str(BUNDLE_DIR / "static"),
+            template_folder=str(BUNDLE_DIR / "templates"))
 # Cheia de sesiune din .env (DROPWISE_SECRET_KEY). Fallback pentru dezvoltare.
 app.secret_key = os.environ.get("DROPWISE_SECRET_KEY",
                                 "dev-only-change-in-production")

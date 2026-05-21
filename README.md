@@ -105,6 +105,11 @@ python app.py               # http://127.0.0.1:5000
 
 Login implicit: `admin` / `admin`.
 
+### Build .exe desktop
+
+`build_exe.bat` împachetează aplicația cu PyInstaller într-o fereastră nativă
+(pywebview). Rezultat: `dist/Dropwise/` — se distribuie tot folderul.
+
 ### Configurare (`.env`)
 
 | Variabilă | Implicit | Rol |

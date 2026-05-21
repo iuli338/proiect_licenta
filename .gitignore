@@ -11,3 +11,8 @@ venv/
 # Stare runtime a aplicatiei
 data/state.json
 data/*.json.tmp
+
+# PyInstaller - artefacte de build (.exe). Vezi build_exe.bat
+build/
+dist/
+*.spec
