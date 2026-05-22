@@ -15,6 +15,10 @@ Imagini PNG cu fundal transparent ale plantelor din catalog.
 | Anthurium | `anthurium.png` | [Gardening PNGs by Vecteezy](https://www.vecteezy.com/free-png/gardening) |
 | Ferigă | `feriga.png` | [Fern PNGs by Vecteezy](https://www.vecteezy.com/free-png/fern) |
 | Cactus / Suculentă | `cactus.png` | [Cactus PNGs by Vecteezy](https://www.vecteezy.com/free-png/cactus) |
+| Plantă custom | `custom.png` | [Plant In Pot PNGs by Vecteezy](https://www.vecteezy.com/free-png/plant-in-pot) |
+
+Imaginea `custom.png` se afişează pe cardul nodurilor configurate cu o
+plantă adăugată manual ("Altă plantă").
 
 Cealaltă imagine (`pothos.png`) provine dintr-o sursă care nu necesită
 atribuire.
