@@ -208,7 +208,7 @@ p {
   white-space: nowrap;
 }
 
-.btn:active {
+.btn:active:not(:disabled) {
   transform: translateY(1px);
 }
 
@@ -218,7 +218,7 @@ p {
   box-shadow: var(--shadow-glow-mint);
 }
 
-.btn--primary:hover {
+.btn--primary:hover:not(:disabled) {
   background: var(--color-mint-soft);
   transform: translateY(-2px);
   box-shadow:
@@ -232,9 +232,21 @@ p {
   border-color: var(--color-border);
 }
 
-.btn--ghost:hover {
+.btn--ghost:hover:not(:disabled) {
   background: var(--color-surface);
   border-color: var(--color-border);
+}
+
+/* Stare dezactivată — buton stins, fără interacţiune (ex: "Continuă" în
+   wizard până alegi o variantă). */
+.btn:disabled {
+  background: var(--color-surface);
+  color: var(--color-text-faint);
+  box-shadow: none;
+  border-color: var(--color-border-soft);
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
 }
 
 .btn--lg {
