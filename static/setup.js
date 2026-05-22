@@ -34,6 +34,20 @@
   function hide(node) { if (node) node.hidden = true; }
 
   /**
+   * Parsează răspunsul ca JSON. Dacă serverul a întors altceva (ex: pagină
+   * 404 HTML), dă o eroare lizibilă în loc de "JSON.parse: unexpected...".
+   */
+  async function readJSON(r) {
+    const text = await r.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      if (r.status === 404) throw new Error('Endpoint indisponibil (404).');
+      throw new Error('Răspuns invalid de la server (HTTP ' + r.status + ').');
+    }
+  }
+
+  /**
    * Comută pasul vizibil al fluxului:
    * 'scan' | 'form' | 'working' | 'done' | 'connected'.
    */
@@ -76,7 +90,7 @@
 
     try {
       const r = await fetch('/api/setup/scan', { method: 'POST' });
-      const j = await r.json();
+      const j = await readJSON(r);
       if (!r.ok) throw new Error(j.error || 'Scanare eşuată.');
       renderDevices(j.devices || []);
     } catch (e) {
@@ -189,7 +203,7 @@
           password: password,
         }),
       });
-      const j = await r.json();
+      const j = await readJSON(r);
       if (!r.ok) throw new Error(j.error || 'Provisioning eşuat.');
 
       // Pornim polling-ul pe job-ul returnat.
@@ -205,7 +219,7 @@
     pollTimer = setInterval(async () => {
       try {
         const r = await fetch('/api/setup/job/' + jobId, { cache: 'no-store' });
-        const j = await r.json();
+        const j = await readJSON(r);
         if (!r.ok) throw new Error(j.error || 'Job inexistent.');
 
         // Actualizăm textul de loading cu mesajul curent de la backend.
@@ -250,23 +264,36 @@
     showError(msg);
   }
 
-  // ---------- Pasul 4: Conectare (salvare IP + deblocare taburi) ----------
+  // ---------- Pasul 4: Conectare (cod de acces + salvare IP) ----------
 
-  async function confirmConnect() {
+  /**
+   * Butonul "Conectare": cere întâi codul de acces (dialog), apoi — după
+   * cod corect — salvează IP-ul hub-ului şi deblochează taburile.
+   */
+  function confirmConnect() {
     if (!lastResult || !lastResult.ip) {
       showError('Lipseşte adresa IP a hub-ului.');
       return;
     }
     clearError();
-    el.btnConnect.disabled = true;
+    // Codul de acces e obligatoriu înainte de a finaliza conectarea.
+    if (window.Dropwise && window.Dropwise.openAuthDialog) {
+      window.Dropwise.openAuthDialog(doConnect);
+    } else {
+      doConnect();
+    }
+  }
 
+  /** Finalizează conectarea — rulat după ce codul a fost acceptat. */
+  async function doConnect() {
+    el.btnConnect.disabled = true;
     try {
       const r = await fetch('/api/setup/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ip: lastResult.ip, ssid: lastResult.ssid }),
       });
-      const j = await r.json();
+      const j = await readJSON(r);
       if (!r.ok) throw new Error(j.error || 'Salvare eşuată.');
 
       // Deblocăm celelalte taburi.

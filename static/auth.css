@@ -1,0 +1,32 @@
+/* ============================================================
+   Dropwise — stiluri pentru dialogul de cod de acces
+   Reutilizează componenta .modal definită în control.css.
+   ============================================================ */
+
+/* Iconiţa de lacăt — variantă mentă pentru dialogul de autentificare. */
+.modal__icon--lock {
+  background: rgba(184, 240, 201, 0.14);
+  color: var(--color-mint);
+}
+
+/* Câmpul de cod — centrat, cifre mai răsfirate. */
+#auth-code {
+  width: 100%;
+  margin: var(--space-5) 0 var(--space-3);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-lg);
+  letter-spacing: 0.25em;
+}
+
+/* Mesajul de eroare al dialogului (cod greşit etc.). */
+.modal__error {
+  margin-bottom: var(--space-4);
+  font-size: var(--fs-sm);
+  color: #ffb4b4;
+}
+
+/* În dialogul de cod, butonul ocupă toată lăţimea. */
+#auth-dialog .modal__actions .btn {
+  width: 100%;
+}

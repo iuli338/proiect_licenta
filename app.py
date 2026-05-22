@@ -18,7 +18,6 @@ Rulare:
 
 import json
 import os
-from functools import wraps
 from pathlib import Path
 
 # Încărcăm variabilele din fişierul .env ÎNAINTE de orice citire os.environ.
@@ -30,10 +29,7 @@ try:
 except ImportError:
     pass
 
-from flask import (
-    Flask, jsonify, render_template, request, redirect,
-    session, url_for, abort
-)
+from flask import Flask, jsonify, render_template, request, abort
 
 try:
     import requests  # pentru proxy către hub
@@ -42,6 +38,7 @@ except ImportError:
 
 import ble_provisioning as ble  # modul de detecţie BLE + provisioning
 import node_config as nodes      # cataloage plante/sol + config noduri
+import auth                       # autentificare prin cod de acces + guard IP
 
 
 # ---------------------------------------------------------------- config
@@ -62,11 +59,7 @@ else:
 DATA_DIR  = BASE_DIR / "data"
 STATE_FILE = DATA_DIR / "state.json"
 
-# Credenţiale de test — vor fi citite mai târziu din configuraţia hub-ului
-TEST_USERNAME = "admin"
-TEST_PASSWORD = "admin"
-
-# Cât timp ţinem o sesiune deschisă (în secunde)
+# Cât timp rămâne valid cookie-ul cu codul de acces (în secunde)
 SESSION_TIMEOUT = 60 * 60 * 8   # 8 ore
 
 # Starea iniţială (creată la primul start, dacă fişierul lipseşte)
@@ -126,19 +119,13 @@ def save_state(state: dict) -> None:
     tmp.replace(STATE_FILE)
 
 
-# ---------------------------------------------------------------- auth
+# ---------------------------------------------------------------- auth (cod de acces)
+#
+# Guard-ul `login_required` = `auth.require_code` — verifică codul din cookie
+# şi răspunde 404 dacă lipseşte sau e greşit. Endpoint-urile publice (home,
+# dashboard, /api/auth*) NU îl folosesc.
 
-def login_required(view):
-    """Decorator: redirect la /login dacă nu există sesiune validă."""
-    @wraps(view)
-    def wrapper(*args, **kwargs):
-        if not session.get("authenticated"):
-            # Pentru API returnăm 401, pentru pagini redirect
-            if request.path.startswith("/api/"):
-                return jsonify({"error": "unauthorized"}), 401
-            return redirect(url_for("login", next=request.path))
-        return view(*args, **kwargs)
-    return wrapper
+login_required = auth.require_code
 
 
 # ---------------------------------------------------------------- routes: pagini
@@ -149,37 +136,59 @@ def home():
     return render_template("index.html")
 
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    error = None
-    if request.method == "POST":
-        username = request.form.get("username", "").strip()
-        password = request.form.get("password", "")
+@app.route("/api/auth", methods=["POST"])
+def api_auth():
+    """
+    Verifică codul de acces (la apăsarea "Conectare"). Endpoint PUBLIC.
+    La cod corect, salvează codul într-un cookie pe browserul clientului.
+    """
+    data = request.get_json(silent=True) or {}
+    code = (data.get("code") or "").strip()
 
-        if username == TEST_USERNAME and password == TEST_PASSWORD:
-            session.permanent = True
-            session["authenticated"] = True
-            session["username"] = username
-            next_url = request.args.get("next") or url_for("dashboard")
-            return redirect(next_url)
-        error = "Utilizator sau parolă incorecte."
+    state = load_state()
+    hub_ip = state["hub"].get("ip")
 
-    return render_template("login.html", error=error)
+    ok, msg = auth.verify_code(code, hub_ip)
+    if not ok:
+        return jsonify({"ok": False, "error": msg}), 401
+
+    # Cod corect — îl punem în cookie. HttpOnly: nu e citibil din JS, dar
+    # browserul îl trimite automat la fiecare cerere către server.
+    resp = jsonify({"ok": True, "message": msg})
+    resp.set_cookie(
+        auth.ACCESS_COOKIE, code,
+        max_age=SESSION_TIMEOUT, httponly=True, samesite="Lax",
+    )
+    return resp
 
 
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect(url_for("login"))
+@app.route("/api/auth/status")
+def api_auth_status():
+    """Spune dacă cererea curentă are deja un cod valid în cookie. PUBLIC —
+    folosit de dashboard la încărcare ca să ştie dacă cere codul."""
+    code = auth.current_code()
+    authed = bool(code and auth._code_is_valid(code))
+    return jsonify({"authorized": authed})
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_auth_logout():
+    """Şterge codul din cookie — deconectare."""
+    resp = jsonify({"ok": True})
+    resp.delete_cookie(auth.ACCESS_COOKIE)
+    return resp
 
 
 @app.route("/dashboard")
-@login_required
 def dashboard():
+    """
+    Pagina dashboard. Se încarcă mereu — dialogul de autentificare (cod de
+    acces) se deschide în JS dacă IP-ul nu e încă autorizat. API-urile din
+    spate sunt protejate de guard.
+    """
     state = load_state()
     return render_template(
         "dashboard.html",
-        username=session.get("username"),
         # True după prima conectare reuşită a hub-ului. Cât timp e False,
         # doar tab-ul "Initial Setup" este accesibil.
         provisioned=bool(state["hub"].get("provisioned")),
@@ -209,11 +218,13 @@ def api_state():
 #                                   deblochează celelalte taburi
 
 @app.route("/api/setup/scan", methods=["POST"])
-@login_required
 def api_setup_scan():
     """
     Scanare BLE pentru hub-uri Dropwise în mod provisioning.
     Operaţie blocantă (~2-6s). Returnează doar plăcile numite "Dropwise HUB".
+
+    PUBLIC — provisioning-ul BLE rulează înainte ca utilizatorul să aibă
+    codul de acces (codul se cere abia la pasul "Conectare").
     """
     try:
         devices = ble.scan_for_hubs()
@@ -224,12 +235,13 @@ def api_setup_scan():
 
 
 @app.route("/api/setup/provision", methods=["POST"])
-@login_required
 def api_setup_provision():
     """
     Porneşte transmiterea credenţialelor WiFi către hub prin BLE.
     Provisioning-ul rulează în fundal — returnăm imediat un job_id pe care
     frontend-ul îl interoghează cu /api/setup/job/<id>.
+
+    PUBLIC — vezi /api/setup/scan.
     """
     data = request.get_json(silent=True) or {}
     address  = (data.get("address") or "").strip()
@@ -246,9 +258,9 @@ def api_setup_provision():
 
 
 @app.route("/api/setup/job/<job_id>", methods=["GET"])
-@login_required
 def api_setup_job(job_id):
-    """Returnează starea curentă a unui job de provisioning (pentru polling)."""
+    """Returnează starea curentă a unui job de provisioning (pentru polling).
+    PUBLIC — vezi /api/setup/scan."""
     job = ble.get_job(job_id)
     if job is None:
         return jsonify({"error": "job inexistent"}), 404
@@ -379,7 +391,8 @@ def api_hub_status():
         return jsonify({"online": False, "error": "requests_not_installed"}), 500
 
     try:
-        r = requests.get(f"http://{hub_ip}/status", timeout=1.5)
+        r = requests.get(f"http://{hub_ip}/status", timeout=1.5,
+                         headers=auth.hub_headers())
         r.raise_for_status()
         data = r.json()
         # Îmbogăţim porturile cu starea de configurare din state.json.
@@ -417,7 +430,8 @@ def api_hub_toggle(pin):
     if not hub_ip or requests is None:
         return jsonify({"error": "hub_unavailable"}), 503
     try:
-        r = requests.get(f"http://{hub_ip}/toggle/{pin}", timeout=1.5)
+        r = requests.get(f"http://{hub_ip}/toggle/{pin}", timeout=1.5,
+                         headers=auth.hub_headers())
         return jsonify(r.json()), r.status_code
     except requests.RequestException as e:
         return jsonify({"error": str(e)}), 502
@@ -436,7 +450,7 @@ def api_hub_water(action, port):
     try:
         r = requests.post(
             f"http://{hub_ip}/water/{action}/{port}",
-            timeout=1.5
+            timeout=1.5, headers=auth.hub_headers(),
         )
         return jsonify(r.json()), r.status_code
     except requests.RequestException as e:

@@ -76,6 +76,15 @@
     const label = document.querySelector('#hub-status-label');
     if (!pill || !label) return;
 
+    // Fără cod de acces / fără hub provizionat — nu interogăm hub-ul
+    // (am primi doar 404). Afişăm starea "neconfigurat".
+    if (!(window.Dropwise && window.Dropwise.canUseHub
+          && window.Dropwise.canUseHub())) {
+      pill.className = 'status-pill status-pill--pending';
+      label.textContent = 'hub neconfigurat';
+      return;
+    }
+
     try {
       const r = await fetch('/api/hub/status', { cache: 'no-store' });
       if (!r.ok) throw new Error('HTTP ' + r.status);

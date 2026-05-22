@@ -241,17 +241,13 @@
   border-left: 1px solid var(--color-border-soft);
 }
 
-.user-menu__name {
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--color-text-muted);
-}
-
 .user-menu__logout {
   display: inline-grid;
   place-items: center;
   width: 32px;
   height: 32px;
+  background: none;
+  cursor: pointer;
   border-radius: var(--radius-sm);
   color: var(--color-text-faint);
   transition: color var(--dur-fast) var(--ease-out),
@@ -488,8 +484,6 @@ kbd {
 }
 
 @media (max-width: 560px) {
-  .user-menu__name { display: none; }
-
   .tab {
     padding: var(--space-3);
   }

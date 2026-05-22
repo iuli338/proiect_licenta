@@ -91,6 +91,13 @@
 #define NVS_KEY_SSID   "wifi_ssid"
 #define NVS_KEY_PASS   "wifi_pass"
 
+// ---------- Autentificare (cod de acces) ----------
+//
+// Codul de acces al hub-ului. Este FIX, definit aici si imprimat pe cutie.
+// La conectarea din dashboard, utilizatorul introduce acest cod; hub-ul
+// confirma daca e corect, iar serverul il retine in sesiunea utilizatorului.
+#define HUB_ACCESS_CODE  "284095"
+
 // ---------- Stare globala ----------
 
 // Modul curent de functionare. Decis in setup().
@@ -492,6 +499,7 @@ int parsePortFromUri(const String& uri, const String& prefix) {
 
 void handleWaterStart() {
 
+  if (!checkAccessCode()) return;   // cod lipsa/gresit => 404
   sendCorsHeaders();
 
   int port = parsePortFromUri(server.uri(), "/water/start/");
@@ -526,6 +534,7 @@ void handleWaterStart() {
 
 void handleWaterStop() {
 
+  if (!checkAccessCode()) return;   // cod lipsa/gresit => 404
   sendCorsHeaders();
 
   int port = parsePortFromUri(server.uri(), "/water/stop/");
@@ -549,6 +558,8 @@ void handleWaterStop() {
 
 // Toggle individual pin handlers (for the Control tab)
 void handleTogglePin(int pin, bool& stateRef) {
+
+  if (!checkAccessCode()) return;   // cod lipsa/gresit => 404
 
   // Daca o udare automata e activa, nu permite toggle manual
   if (wateringPhase != PHASE_IDLE) {
@@ -583,6 +594,8 @@ void handleToggle18() { handleTogglePin(PIN_VALVE2, valveOn[1]); }
 void handleToggle19() { handleTogglePin(PIN_VALVE3, valveOn[2]); }
 
 void handleStatus() {
+
+  if (!checkAccessCode()) return;   // cod lipsa/gresit => 404
 
   String json = "{\"ports\":[";
 
@@ -627,6 +640,49 @@ void handleResetProvisioning() {
     "{\"status\":\"provisioning reset, rebooting\"}");
   delay(500);
   ESP.restart();
+}
+
+// ---------- Autentificare prin cod de acces ----------
+//
+// Fiecare endpoint care poate cauza daune (status, toggle, water) verifica
+// codul de acces, primit in header-ul HTTP "X-Access-Code". Fara cod corect
+// hub-ul raspunde 404 — controlul nu e posibil pana nu te uiti pe cutie.
+
+// Verifica codul de acces din header. La cod lipsa/gresit trimite 404 si
+// returneaza false (handler-ul apelant trebuie sa se opreasca imediat).
+bool checkAccessCode() {
+  String code = server.hasHeader("X-Access-Code")
+                  ? server.header("X-Access-Code") : "";
+  if (code == HUB_ACCESS_CODE) {
+    return true;
+  }
+  sendCorsHeaders();
+  server.send(404, "application/json", "{\"error\":\"not found\"}");
+  return false;
+}
+
+// POST /auth  body: {"code":"..."}  — verificarea initiala a codului,
+// apelata din dialogul de conectare al dashboard-ului.
+void handleAuth() {
+  sendCorsHeaders();
+
+  String body = server.hasArg("plain") ? server.arg("plain") : "";
+  // Extragem valoarea campului "code" din JSON-ul simplu primit.
+  String code = "";
+  int k = body.indexOf("\"code\"");
+  if (k >= 0) {
+    int c = body.indexOf(':', k);
+    int q1 = body.indexOf('"', c + 1);
+    int q2 = body.indexOf('"', q1 + 1);
+    if (q1 >= 0 && q2 > q1) code = body.substring(q1 + 1, q2);
+  }
+
+  if (code == HUB_ACCESS_CODE) {
+    server.send(200, "application/json", "{\"ok\":true}");
+  } else {
+    server.send(401, "application/json",
+      "{\"ok\":false,\"error\":\"cod gresit\"}");
+  }
 }
 
 // ============================================================
@@ -839,6 +895,11 @@ void startNormalMode() {
   }
   esp_now_register_recv_cb(onDataRecv);
 
+  // Cerem serverului sa retina header-ul cu codul de acces — implicit
+  // WebServer-ul nu pastreaza header-ele personalizate.
+  const char* trackedHeaders[] = { "X-Access-Code" };
+  server.collectHeaders(trackedHeaders, 1);
+
   // Rute HTTP
   server.on("/status", HTTP_GET, handleStatus);
   server.on("/status", HTTP_OPTIONS, handleOptions);
@@ -847,6 +908,10 @@ void startNormalMode() {
   server.on("/reset", HTTP_POST,    handleResetProvisioning);
   server.on("/reset", HTTP_GET,     handleResetProvisioning);
   server.on("/reset", HTTP_OPTIONS, handleOptions);
+
+  // Autentificare — verificarea initiala a codului de acces.
+  server.on("/auth", HTTP_POST,    handleAuth);
+  server.on("/auth", HTTP_OPTIONS, handleOptions);
 
   // Toggle individual pe pini (din tab-ul Control)
   server.on("/toggle/16", HTTP_GET, handleToggle16);

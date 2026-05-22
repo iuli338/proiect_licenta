@@ -117,6 +117,13 @@
   // ---------- Polling stare hub ----------
 
   async function poll() {
+    // Fără cod de acces / fără hub provizionat — nu interogăm (am primi
+    // doar 404). Blocăm comenzile şi afişăm bannerul.
+    if (!(window.Dropwise && window.Dropwise.canUseHub
+          && window.Dropwise.canUseHub())) {
+      setControlsDisabled(true, true);
+      return;
+    }
     try {
       const r = await fetch('/api/hub/status', { cache: 'no-store' });
       const j = await r.json();

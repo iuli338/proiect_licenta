@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='setup.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='control.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='nodes.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='auth.css') }}" />
   {# Tema DARK — se încarcă ultima ca să suprascrie token-urile de culoare #}
   <link rel="stylesheet" href="{{ url_for('static', filename='dashboard_theme.css') }}" />
 </head>
@@ -129,14 +130,14 @@
         </div>
 
         <div class="user-menu">
-          <span class="user-menu__name mono">{{ username or 'user' }}</span>
-          <a href="{{ url_for('logout') }}" class="user-menu__logout" title="Deconectare" aria-label="Deconectare">
+          <button type="button" id="btn-logout" class="user-menu__logout"
+                  title="Deconectare" aria-label="Deconectare">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M9 21 H5 a 2 2 0 0 1 -2 -2 V5 a 2 2 0 0 1 2 -2 h 4"/>
               <path d="M16 17 l 5 -5 -5 -5"/>
               <path d="M21 12 H9"/>
             </svg>
-          </a>
+          </button>
         </div>
       </div>
 
@@ -713,6 +714,36 @@
 
   </main>
 
+  <!-- ============== DIALOG: cod de acces ============== -->
+  <dialog id="auth-dialog" class="modal">
+    <div class="modal__card">
+      <div class="modal__icon modal__icon--lock" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="11" width="16" height="10" rx="2"/>
+          <path d="M8 11 V7 a 4 4 0 0 1 8 0 v4"/>
+        </svg>
+      </div>
+
+      <h2 class="modal__title">Cod de acces</h2>
+      <p class="modal__text">
+        Introdu codul de acces al hub-ului. Îl găseşti
+        <strong>imprimat pe cutia hub-ului</strong>.
+      </p>
+
+      <form id="auth-form" autocomplete="off">
+        <input type="text" id="auth-code" class="field__input"
+               inputmode="numeric" placeholder="Cod de acces"
+               aria-label="Cod de acces" />
+        <p id="auth-error" class="modal__error" role="alert" hidden></p>
+        <div class="modal__actions">
+          <button type="submit" id="auth-submit" class="btn btn--primary">
+            <span class="btn__label">Conectează-te</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
   <!-- ============== DIALOG: disclaimer control manual ============== -->
   <dialog id="control-disclaimer" class="modal">
     <div class="modal__card">
@@ -759,6 +790,7 @@
     <a href="{{ url_for('home') }}">pagina principală</a>
   </footer>
 
+  <script src="{{ url_for('static', filename='auth.js') }}"></script>
   <script src="{{ url_for('static', filename='dashboard.js') }}"></script>
   <script src="{{ url_for('static', filename='setup.js') }}"></script>
   <script src="{{ url_for('static', filename='control.js') }}"></script>

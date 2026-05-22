@@ -49,7 +49,19 @@
   //  MONITOR — carduri noduri
   // ============================================================
 
+  /** True dacă are sens să interogăm hub-ul (autentificat + provizionat). */
+  function canPoll() {
+    return !!(window.Dropwise && window.Dropwise.canUseHub
+              && window.Dropwise.canUseHub());
+  }
+
   async function pollMonitor() {
+    // Fără cod / fără hub provizionat — nu interogăm (am primi doar 404).
+    if (!canPoll()) {
+      show(el.monitorOffline);
+      el.nodeGrid.innerHTML = '';
+      return;
+    }
     try {
       const j = await getJSON('/api/hub/status', { cache: 'no-store' });
       if (!j.online || !j.data) {
@@ -69,6 +81,8 @@
   async function pollNodesGrid() {
     // Cât timp wizardul e deschis, grila e ascunsă — nu o actualizăm.
     if (!el.wizard.hidden) return;
+    // Fără cod / fără hub provizionat — nu interogăm.
+    if (!canPoll()) return;
     try {
       const j = await getJSON('/api/hub/status', { cache: 'no-store' });
       if (j.online && j.data) {
