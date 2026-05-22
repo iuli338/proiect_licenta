@@ -608,6 +608,8 @@
   align-items: center;
   gap: var(--space-4);
   margin-bottom: var(--space-5);
+  /* Padding vertical mai mic decât .panel — cardul de stare e compact. */
+  padding-block: var(--space-4);
 }
 
 /* LED-ul de stare — culoarea vine din data-state. */
