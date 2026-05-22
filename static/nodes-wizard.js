@@ -232,9 +232,24 @@
           body: JSON.stringify({ plant: wiz.plant, soil: wiz.soil }),
         });
       list.innerHTML = '';
+      // Backend-ul trimite linii ca obiecte {group, text} — afişăm grupul
+      // ca etichetă colorată în faţa textului. Fallback la string simplu
+      // dacă vine vreodată în formatul vechi.
       (j.explanation || []).forEach((line) => {
         const li = document.createElement('li');
-        li.textContent = line;
+        if (typeof line === 'string') {
+          li.textContent = line;
+        } else {
+          li.dataset.group = line.group || '';
+          const tag = document.createElement('span');
+          tag.className = 'summary-list__tag';
+          tag.textContent = summaryTagLabel(line.group);
+          const txt = document.createElement('span');
+          txt.className = 'summary-list__text';
+          txt.textContent = line.text || '';
+          li.appendChild(tag);
+          li.appendChild(txt);
+        }
         list.appendChild(li);
       });
     } catch (e) {
@@ -391,6 +406,10 @@
   function waterLabel(lvl) {
     return { scazut: 'necesar scăzut de apă', mediu: 'necesar mediu',
              ridicat: 'necesar ridicat' }[lvl] || lvl;
+  }
+  function summaryTagLabel(group) {
+    return { sol: 'Sol', planta: 'Plantă',
+             functionare: 'Funcţionare' }[group] || '';
   }
   function retentionLabel(lvl) {
     return { scazut: 'reţine puţină apă', mediu: 'retenţie medie',

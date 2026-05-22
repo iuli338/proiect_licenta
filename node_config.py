@@ -23,6 +23,7 @@ Modelul de configurare al unui nod (salvat în state.json["nodes"][port]):
 from __future__ import annotations
 
 import json
+import math
 import os
 import threading
 import time
@@ -102,64 +103,147 @@ def load_catalog() -> dict:
         return _catalog_cache
 
 
-# ---------------------------------------------------------------- regulator
+# ---------------------------------------------------------------- model + regulator
+#
+# Modelul de proces (umiditatea solului) e de ordinul 1:
+#     h(t) = h_inf + (h0 - h_inf) * exp(-t / tau)
+# Identificat din 10 zile de date experimentale — vezi misc/model_regulator.md
+# şi misc/identificare_model.py. Valorile de mai jos vin din acel script.
+#
+# SOLUL  alege parametrii MODELULUI       (K, tau)
+# PLANTA alege parametrii REGULATORULUI   (setpoint, lambda → Kp, Ki)
 
-# Praguri de umiditate a solului (%) după nivelul de necesar al plantei.
-# target = umiditatea la care vrem să ţinem solul.
-_WATER_TARGET = {"scazut": 35, "mediu": 50, "ridicat": 65}
-# Histerezis de bază — sub (target - hysteresis) pornim udarea.
-_BASE_HYSTERESIS = 8
+# Câştig nominal în zona de operare (~setpoint), comun pentru toate solurile.
+# K depinde de senzor/ghiveci, nu de tipul solului; neliniaritatea pe stare
+# de umiditate e corectată automat de termenul integral al PI-ului.
+_K_NOMINAL = 1.5     # % umiditate per ml apă
+
+# Constanta de timp a uscării, în ore. Identificată pe segmentul de 96h al
+# experimentului: tau ~= 32 h pentru un sol cu retenţie medie ("universal").
+# Retenţia scalează tau: drenant pierde apa repede, turbă/argilos o reţin.
+_TAU_REF_H = 31.7    # ore — referinţa pentru retenţie "mediu"
+_FACTORI_TAU = {"scazut": 0.55, "mediu": 1.00, "ridicat": 1.70}
+
+# Setpoint-ul (umiditatea ţintă) după necesarul de apă al plantei.
+_SETPOINT = {"scazut": 35, "mediu": 50, "ridicat": 65}    # % umiditate
+
+# Lambda IMC: constanta de timp dorită în bucla închisă, în ore.
+# Mic = regulator agresiv (plante însetate); mare = regulator blând.
+_LAMBDA_H = {"scazut": 48.0, "mediu": 30.0, "ridicat": 18.0}
+
+# Histerezis fix pentru declanşare: udarea porneşte sub (setpoint - HISTEREZIS).
+# Mic ca să nu lăsăm solul să cadă prea mult sub ţintă între udări (max o/zi).
+_HISTEREZIS = 5
+
+# Blocaj minim între două udări — promisiunea de proiect: cel mult o pe zi.
+_INTERVAL_UDARE_MIN = 60 * 24    # 24 ore
 
 
-def derive_regulator(water_need: str, retention: str) -> dict:
+def derive_model(retention: str) -> dict:
+    """Parametrii modelului de proces, derivaţi din retenţia solului.
+
+    Întoarce {K [%/ml], tau [h]} — vezi misc/model_regulator.md.
     """
-    Derivă parametrii regulatorului din necesarul plantei şi retenţia solului.
-
-    Regulatorul de pe nod menţine umiditatea solului în jurul unui prag:
-      - target_moisture : umiditatea ţintă (%)
-      - hysteresis      : porneşte udarea sub (target - hysteresis)
-      - dose_ml         : cantitatea per ciclu de udare (ml)
-      - check_interval_min : la cât timp re-evaluează nodul
-
-    Solul cu retenţie scăzută => doze mai mici, verificări mai dese.
-    """
-    target = _WATER_TARGET.get(water_need, 50)
-
-    # Sol care reţine puţin => histerezis mai mic (reacţionăm mai repede).
-    hyst = _BASE_HYSTERESIS
-    if retention == "scazut":
-        hyst -= 2
-    elif retention == "ridicat":
-        hyst += 3
-
-    # Doza per ciclu: plantele cu necesar mare primesc mai mult; solul
-    # drenant primeşte mai puţin odată (ca să nu treacă apa pe lângă).
-    dose = {"scazut": 60, "mediu": 110, "ridicat": 160}[water_need]
-    if retention == "scazut":
-        dose = int(dose * 0.7)
-    elif retention == "ridicat":
-        dose = int(dose * 1.15)
-
-    # Interval de verificare: sol drenant => verificăm mai des.
-    interval = {"scazut": 45, "mediu": 90, "ridicat": 120}[retention]
-
+    factor = _FACTORI_TAU.get(retention, 1.0)
     return {
-        "target_moisture": target,
-        "hysteresis": hyst,
-        "dose_ml": dose,
-        "check_interval_min": interval,
+        "K": _K_NOMINAL,
+        "tau_h": round(_TAU_REF_H * factor, 1),
     }
 
 
-def explain_regulator(reg: dict) -> list[str]:
-    """Returnează explicaţii lizibile pentru parametrii derivaţi —
-    afişate utilizatorului la pasul de sumar al wizardului."""
+def derive_regulator(water_need: str, retention: str) -> dict:
+    """Parametrii regulatorului PI, acordaţi prin IMC pe modelul solului.
+
+    Întoarce parametrii NOI (model + acordare IMC) plus câteva câmpuri
+    LEGACY păstrate pentru compatibilitate cu firmware-ul ESP existent şi
+    cu statisticile mock. Firmware-ul va fi adaptat ulterior la PI.
+
+    Câmpuri noi:
+      - model: {K, tau_h}                 — parametrii procesului (din sol)
+      - setpoint              : umiditate ţintă [%]
+      - hysteresis            : udare porneşte sub (setpoint - hysteresis) [%]
+      - lambda_h              : constanta de timp dorită în b.î. [ore]
+      - Kp                    : câştig proporţional [ml / % eroare]
+      - Ki                    : câştig integral [ml / (% eroare · h)]
+      - min_interval_min      : blocaj minim între udări [min]
+      - dose_estimat_ml       : volum tipic al unei udări (pt. statistici/UI)
+
+    Câmpuri legacy (acelaşi sens cu cele vechi, dar derivate din PI):
+      - target_moisture       = setpoint
+      - dose_ml               = dose_estimat_ml
+      - check_interval_min    = min_interval_min
+    """
+    model = derive_model(retention)
+    K, tau = model["K"], model["tau_h"]
+
+    setpoint = _SETPOINT.get(water_need, 50)
+    lam = _LAMBDA_H.get(water_need, 30.0)
+
+    # Acordare IMC pentru proces de ordin 1: Kp = tau / (K · lambda), Ki = Kp / tau.
+    Kp = tau / (K * lam)
+    Ki = Kp / tau
+
+    # Volumul TIPIC al unei udări — pentru afişare în UI şi statistici.
+    # PI-ul îl calculează dinamic la fiecare udare; aici estimăm valoarea
+    # de regim permanent: cât trebuie ca să compensăm evaporarea de o zi
+    # şi să aducem solul de la (setpoint - histerezis) înapoi la setpoint.
+    #
+    # Pierderea zilnică (la 24h) pe modelul de ordin 1, pornind de la
+    # setpoint, este aproximativ:  delta_h ≈ (setpoint - h_inf) · (1 - e^(-24/τ)).
+    # h_inf ≈ 0% (sol uscat de echilibru); adăugăm şi histerezisul.
+    pierdere_zilnica = setpoint * (1.0 - math.exp(-24.0 / tau))
+    dose_estimat = (pierdere_zilnica + _HISTEREZIS) / K
+    dose_estimat = max(15, min(200, int(round(dose_estimat))))
+
+    return {
+        # --- model (din sol) ---
+        "model": model,
+        # --- regulator (din plantă, acordat pe sol) ---
+        "setpoint": setpoint,
+        "hysteresis": _HISTEREZIS,
+        "lambda_h": lam,
+        "Kp": round(Kp, 3),
+        "Ki": round(Ki, 4),
+        "min_interval_min": _INTERVAL_UDARE_MIN,
+        "dose_estimat_ml": dose_estimat,
+        # --- legacy (pentru firmware ESP actual + statistici mock) ---
+        "target_moisture": setpoint,
+        "dose_ml": dose_estimat,
+        "check_interval_min": _INTERVAL_UDARE_MIN,
+    }
+
+
+def explain_regulator(reg: dict) -> list[dict]:
+    """Explicaţii lizibile pentru pasul de sumar al wizardului.
+
+    Trei grupuri vizuale:
+      sol        — parametrii modelului (K, τ) — vin din alegerea solului
+      planta     — parametrii regulatorului (setpoint, λ, Kp, Ki) — din plantă
+      functionare — comportamentul efectiv (când udă, cât udă)
+
+    Front-end-ul afişează grupul ca etichetă colorată în faţa textului.
+    """
+    m = reg.get("model", {})
+    K = m.get("K", _K_NOMINAL)
+    tau = m.get("tau_h", _TAU_REF_H)
     return [
-        f"Solul va fi menţinut în jurul a {reg['target_moisture']}% umiditate.",
-        f"Udarea porneşte când umiditatea scade sub "
-        f"{reg['target_moisture'] - reg['hysteresis']}%.",
-        f"Fiecare ciclu de udare livrează aproximativ {reg['dose_ml']} ml.",
-        f"Nodul reevaluează starea la fiecare {reg['check_interval_min']} minute.",
+        {"group": "sol",
+         "text": f"Model identificat din date — câştig K = {K} % umiditate / ml apă."},
+        {"group": "sol",
+         "text": f"Constantă de timp a uscării τ = {tau} h "
+                 f"(cât rezistă solul fără udare)."},
+        {"group": "planta",
+         "text": f"Setpoint {reg['setpoint']}% umiditate, λ = "
+                 f"{reg['lambda_h']:.0f} h (cât de prompt reacţionează regulatorul)."},
+        {"group": "planta",
+         "text": f"Regulator PI acordat prin IMC: Kp = {reg['Kp']}, "
+                 f"Ki = {reg['Ki']} ml/(%·h)."},
+        {"group": "functionare",
+         "text": f"Udarea porneşte când umiditatea scade sub "
+                 f"{reg['setpoint'] - reg['hysteresis']}%, cel mult o dată la 24 h."},
+        {"group": "functionare",
+         "text": f"Volum estimat per udare ≈ {reg['dose_estimat_ml']} ml "
+                 f"(PI-ul ajustează dinamic în funcţie de eroare)."},
     ]
 
 
@@ -335,6 +419,15 @@ def build_node_config(payload: dict) -> tuple[Optional[dict], Optional[str]]:
 
     regulator = derive_regulator(water_need, retention)
 
+    # Override manual din UI (pagina "Parametri" -> Editează). Validăm fiecare
+    # câmp şi îl suprascriem peste regulatorul derivat. Câmpurile lipsă se
+    # păstrează din derivare; câmpurile invalide → eroare.
+    override = payload.get("regulator_override")
+    if override:
+        regulator, err = _apply_regulator_override(regulator, override)
+        if err:
+            return None, err
+
     config = {
         "plant": {
             "id": plant_id, "name": plant_name,
@@ -351,6 +444,63 @@ def build_node_config(payload: dict) -> tuple[Optional[dict], Optional[str]]:
         "created_at": time.time(),
     }
     return config, None
+
+
+# ---------------------------------------------------------------- override regulator
+#
+# Schema: per câmp, (tip, min, max). Domeniile sunt LARGI intenţionat
+# (utilizatorul a fost avertizat că editează pe propriul risc); rejectăm
+# doar valorile imposibile fizic (negative, zero la divizori, NaN).
+
+_OVERRIDE_SCHEMA = {
+    # Câmpurile de bază ale regulatorului
+    "setpoint":          (float, 0.0,    100.0),     # % umiditate
+    "hysteresis":        (float, 0.5,    50.0),      # % umiditate
+    "lambda_h":          (float, 0.1,    500.0),     # ore
+    "Kp":                (float, 0.0,    1000.0),    # ml / % eroare
+    "Ki":                (float, 0.0,    100.0),     # ml / (% · h)
+    "min_interval_min":  (int,   1,      10080),     # 1 min … 7 zile
+    "dose_estimat_ml":   (int,   1,      2000),      # ml
+    # Modelul (sub-obiect)
+    "model.K":           (float, 0.001,  100.0),     # %/ml
+    "model.tau_h":       (float, 0.1,    1000.0),    # ore
+}
+
+
+def _apply_regulator_override(reg: dict, override: dict):
+    """Aplică un override validat peste regulator. Returnează (reg, err)."""
+    reg = dict(reg)
+    model = dict(reg.get("model") or {})
+
+    for key, raw in override.items():
+        if key not in _OVERRIDE_SCHEMA:
+            return None, f"Parametru necunoscut: {key}"
+        kind, lo, hi = _OVERRIDE_SCHEMA[key]
+        try:
+            val = kind(raw)
+        except (TypeError, ValueError):
+            return None, f"Valoare invalidă pentru {key}: {raw!r}"
+        # Verificăm NaN / inf separat (float(nan) trece prin int).
+        if isinstance(val, float) and not math.isfinite(val):
+            return None, f"Valoare invalidă pentru {key}: {raw!r}"
+        if val < lo or val > hi:
+            return None, (f"Valoare în afara intervalului pentru {key}: "
+                          f"{val} (admis {lo}..{hi})")
+        if key.startswith("model."):
+            model[key.split(".", 1)[1]] = val
+        else:
+            reg[key] = val
+
+    if model:
+        reg["model"] = model
+
+    # Câmpurile legacy reflectă noile valori (pentru firmware-ul existent
+    # şi pentru statistici mock care încă citesc dose_ml / target_moisture).
+    reg["target_moisture"] = reg.get("setpoint", reg.get("target_moisture"))
+    reg["dose_ml"] = reg.get("dose_estimat_ml", reg.get("dose_ml"))
+    reg["check_interval_min"] = reg.get(
+        "min_interval_min", reg.get("check_interval_min"))
+    return reg, None
 
 
 # ---------------------------------------------------------------- statistici
