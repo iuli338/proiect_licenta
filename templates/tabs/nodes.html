@@ -198,4 +198,23 @@
           <dl id="stats-list" class="stats-list"></dl>
         </div>
       </div>
+
+      {# ============================================
+         PARAMETRI nod — model + regulator
+         ============================================ #}
+      <div id="node-params" class="node-stats" hidden>
+        <button type="button" id="params-close" class="wizard__close">
+          <span aria-hidden="true">←</span> Înapoi la noduri
+        </button>
+
+        <p class="wizard__node">
+          Parametri · <strong id="params-node-name">—</strong>
+        </p>
+
+        <div class="panel">
+          <h2 class="panel__title" id="params-plant">—</h2>
+          <p class="panel__subtitle" id="params-soil">—</p>
+          <div id="params-sections"></div>
+        </div>
+      </div>
     </section>

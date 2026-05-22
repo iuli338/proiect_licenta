@@ -531,6 +531,48 @@
   background: var(--color-mint);
 }
 
+/* Linii cu etichetă de grup (sol/plantă/funcţionare) — eticheta apare ca
+   un mic chip colorat în faţa textului. Punctul de mai sus dispare când
+   există tag. */
+.summary-list li[data-group]::before { display: none; }
+
+.summary-list__tag {
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border-soft);
+}
+
+.summary-list__text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Culori pe grup — folosim variabilele temei. */
+.summary-list li[data-group='sol'] .summary-list__tag {
+  background: rgba(184, 240, 201, 0.10);
+  color: var(--color-mint);
+  border-color: rgba(184, 240, 201, 0.30);
+}
+.summary-list li[data-group='planta'] .summary-list__tag {
+  background: rgba(255, 204, 102, 0.10);
+  color: #ffcc66;
+  border-color: rgba(255, 204, 102, 0.30);
+}
+.summary-list li[data-group='functionare'] .summary-list__tag {
+  background: rgba(140, 200, 255, 0.10);
+  color: #8cc8ff;
+  border-color: rgba(140, 200, 255, 0.30);
+}
+
 /* ---------- 7. Culori card ---------- */
 
 .color-grid {
@@ -598,6 +640,357 @@
 .stats-list__label:last-of-type,
 .stats-list__value:last-of-type {
   border-bottom: none;
+}
+
+
+/* ---------- 8b. Pagina Parametri (model + regulator) ----------
+   Foloseşte aceeaşi structură ca node-stats (refoloseşte .node-stats),
+   dar conţinutul e împărţit în secţiuni cu titlu colorat per grup.
+   Densitate vizuală mai compactă decât panel-urile clasice. */
+
+/* Panel-ul propriu paginii — padding redus faţă de .panel standard. */
+#node-params .panel {
+  padding: var(--space-4) var(--space-5);
+}
+
+/* Titlul plantei (panel__title) — mai mic, mai aerisit. */
+#node-params .panel__title {
+  font-size: var(--fs-lg);
+}
+
+#node-params .panel__subtitle {
+  font-size: var(--fs-sm);
+}
+
+.params-note {
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  /* Anulează `max-width: 65ch` din stilul global pentru <p>. */
+  max-width: none;
+}
+
+.params-section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.params-section:first-of-type {
+  margin-top: var(--space-1);
+}
+
+.params-section__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin-bottom: var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.params-section__title::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-mint);
+}
+
+.params-section[data-group='sol'] .params-section__title::before {
+  background: var(--color-mint);
+}
+.params-section[data-group='planta'] .params-section__title::before {
+  background: #ffcc66;
+}
+.params-section[data-group='functionare'] .params-section__title::before {
+  background: #8cc8ff;
+}
+
+/* Lista de parametri — perechi etichetă (+ hint) / valoare. */
+.params-list {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0;
+  margin-top: var(--space-2);
+}
+
+.params-list__label,
+.params-list__value {
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--color-border-soft);
+  font-size: var(--fs-sm);
+}
+
+/* Etichetă (nume + hint) — orizontal: nume la stânga, hint la dreapta lui.
+   Pe ecran îngust se rupe pe două rânduri prin flex-wrap. */
+.params-list__label {
+  color: var(--color-text);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px var(--space-3);
+  padding-right: var(--space-3);
+}
+
+.params-list__name {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.params-list__hint {
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+  line-height: 1.35;
+  flex: 1;
+  min-width: 0;
+}
+
+.params-list__value {
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  font-weight: 600;
+  align-self: center;
+}
+
+/* Ultima pereche dintr-o secţiune — fără linie de jos. */
+.params-list__label:last-of-type,
+.params-list__value:last-of-type {
+  border-bottom: none;
+}
+
+/* ---------- 8c. Pagina Parametri — mod editare ---------- */
+
+/* Toolbar cu Editează / Actualizează / Anulează — plasat sub notă, ca
+   utilizatorul să citească contextul înainte de buton. Margin-urile
+   păstrează acelaşi ritm vertical (--space-4) cu nota explicativă. */
+.params-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+/* Butoane compacte pentru toolbar-ul paginii Parametri. */
+.params-toolbar .btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--fs-sm);
+}
+
+.params-toolbar__edit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.params-toolbar__icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Notă cu fundal de avertisment — apare doar în mod edit, full-width,
+   între bara cu butoane şi prima secţiune ("Model sol"). Margin-urile
+   păstrează acelaşi ritm vertical (--space-4) cu celelalte elemente. */
+.params-note--warn {
+  margin-top: 0;
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 204, 102, 0.10);
+  border: 1px solid rgba(255, 204, 102, 0.30);
+  border-radius: var(--radius-md);
+  color: #ffd98a;
+}
+
+/* Inputuri numerice — în loc de valoarea read-only.
+   Spinner-ele native (săgeţile up/down) sunt ascunse: arată inconsistent
+   între browsere şi se ciocnesc cu paleta închisă. Valoarea se editează
+   manual sau prin săgeţile de tastatură. */
+.params-input {
+  width: 110px;
+  padding: 5px 10px;
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: right;
+  transition: border-color var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out);
+  -moz-appearance: textfield;        /* Firefox */
+  appearance: textfield;
+}
+
+/* WebKit / Blink — Chrome, Edge, Safari, Opera. */
+.params-input::-webkit-outer-spin-button,
+.params-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.params-input:hover {
+  border-color: var(--color-border);
+}
+
+.params-input:focus {
+  outline: none;
+  border-color: var(--color-mint);
+  box-shadow: 0 0 0 2px rgba(184, 240, 201, 0.18);
+}
+
+.params-input--invalid {
+  border-color: #ef6464;
+}
+.params-input--invalid:focus {
+  box-shadow: 0 0 0 2px rgba(239, 100, 100, 0.20);
+}
+
+/* Unitatea de lângă input — lăţime fixă rezervată ca toate inputurile să
+   fie aliniate vertical indiferent de lungimea textului ("%", "%/ml" etc.). */
+.params-input__unit {
+  margin-left: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+  display: inline-block;
+  width: 36px;
+  text-align: left;
+}
+
+/* În mod edit valoarea (dd) trebuie să aibă spaţiu pentru input + unitate. */
+.node-stats[data-edit='true'] .params-list__value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Spinner pe buton — cerc cu un arc lipsă, rotit infinit. Folosit pe
+   "Actualizează" cât timp aşteptăm răspunsul nodului. */
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: params-spin 0.7s linear infinite;
+  vertical-align: -2px;
+  margin-right: var(--space-2);
+  opacity: 0.85;
+}
+
+.btn--loading {
+  cursor: progress;
+}
+
+@keyframes params-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Toast de confirmare/eroare — apare după "Actualizează", cu pictogramă
+   şi animaţie subtilă de slide-in. Vizibilitatea se controlează prin
+   clasa `--show`, NU prin atributul HTML `hidden` (care anulează tranziţia
+   CSS pentru că setează display:none). */
+.params-toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* Înălţime zero când ascuns: nu lasă spaţiu gol între titlu şi notă. */
+  max-height: 0;
+  margin: 0;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  pointer-events: none;
+  overflow: hidden;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out),
+    max-height var(--dur-base) var(--ease-out),
+    margin var(--dur-base) var(--ease-out),
+    padding var(--dur-base) var(--ease-out),
+    visibility 0s linear var(--dur-base);
+}
+
+.params-toast--show {
+  max-height: 80px;
+  margin-top: var(--space-3);
+  margin-bottom: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out),
+    max-height var(--dur-base) var(--ease-out),
+    margin var(--dur-base) var(--ease-out),
+    padding var(--dur-base) var(--ease-out),
+    visibility 0s linear 0s;
+}
+
+.params-toast__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.params-toast__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.params-toast[data-kind='ok'] .params-toast__icon {
+  background: rgba(184, 240, 201, 0.18);
+}
+
+.params-toast[data-kind='error'] .params-toast__icon {
+  background: rgba(239, 100, 100, 0.18);
+}
+
+.params-toast__text {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Pulsaţie discretă pe iconiţa de succes la apariţie — atrage privirea
+   fără să fie obositoare. Doar o singură undă. */
+.params-toast--show[data-kind='ok'] .params-toast__icon {
+  animation: params-check-pop 0.5s var(--ease-out);
+}
+
+@keyframes params-check-pop {
+  0%   { transform: scale(0.7); }
+  60%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.params-toast[data-kind='ok'] {
+  background: rgba(184, 240, 201, 0.10);
+  border: 1px solid rgba(184, 240, 201, 0.30);
+  color: var(--color-mint);
+}
+
+.params-toast[data-kind='error'] {
+  background: rgba(239, 100, 100, 0.10);
+  border: 1px solid rgba(239, 100, 100, 0.40);
+  color: #ff8a8a;
 }
 
 

@@ -177,6 +177,8 @@
             <button type="button" class="node-card__menu-item" role="menuitem"
                     data-action="stats">Vezi statistici</button>
             <button type="button" class="node-card__menu-item" role="menuitem"
+                    data-action="params">Parametri</button>
+            <button type="button" class="node-card__menu-item" role="menuitem"
                     data-action="reconfigure">Reconfigurează</button>
           </div>
         </div>
@@ -224,6 +226,12 @@
         menuList.hidden = true;
         menuBtn.setAttribute('aria-expanded', 'false');
         if (card.dataset.node) nodes.openNodeStats(card.dataset.node);
+      });
+    menu.querySelector('[data-action="params"]')
+      .addEventListener('click', () => {
+        menuList.hidden = true;
+        menuBtn.setAttribute('aria-expanded', 'false');
+        if (card.dataset.node) nodes.openNodeParams(card.dataset.node);
       });
   }
 

@@ -102,6 +102,11 @@
       statsPlant: document.getElementById('stats-plant'),
       statsSoil: document.getElementById('stats-soil'),
       statsList: document.getElementById('stats-list'),
+      nodeParams: document.getElementById('node-params'),
+      paramsNodeName: document.getElementById('params-node-name'),
+      paramsPlant: document.getElementById('params-plant'),
+      paramsSoil: document.getElementById('params-soil'),
+      paramsSections: document.getElementById('params-sections'),
     };
 
     // Catalogul — necesar pentru wizard şi pentru culorile cardurilor.
@@ -115,6 +120,7 @@
     if (nodes.initGrid) nodes.initGrid();
     if (nodes.initWizard) nodes.initWizard();
     if (nodes.initStats) nodes.initStats();
+    if (nodes.initParams) nodes.initParams();
 
     // ---- Polling pe tabul activ ----
     window.addEventListener('dropwise:tab-activated', (ev) => {

@@ -31,7 +31,7 @@
 
   /**
    * Aplică ruta din hash pentru tabul Noduri.
-   * Forme: nodes | nodes/<P>/config | nodes/<P>/stats
+   * Forme: nodes | nodes/<P>/config | nodes/<P>/stats | nodes/<P>/params
    *
    * Garda `applyingHash` trebuie să acopere TOATĂ operaţia, inclusiv
    * await-urile din openWizard/openNodeStats — altfel deschiderea cedează
@@ -50,6 +50,8 @@
     try {
       if (node && view === 'stats') {
         await nodes.openNodeStats(node);
+      } else if (node && view === 'params' && nodes.openNodeParams) {
+        await nodes.openNodeParams(node);
       } else if (node && view === 'config') {
         await nodes.openWizardForReconfigure(node);
       } else {
@@ -60,11 +62,12 @@
     }
   };
 
-  /** Închide wizardul/statisticile fără a rescrie hash-ul. */
+  /** Închide wizardul/statisticile/parametrii fără a rescrie hash-ul. */
   function closeSubViews() {
     const el = nodes.el;
     hide(el.wizard);
     hide(el.nodeStats);
+    hide(el.nodeParams);
     show(el.nodesHeader);
     show(el.nodesGrid);
   }
