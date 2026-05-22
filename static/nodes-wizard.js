@@ -58,6 +58,12 @@
     el.wizardNodeName.textContent = nodeName;
     if (el.wizardTitleWord) el.wizardTitleWord.textContent = titleWord;
     el.wizard.dataset.edit = wiz.edit ? 'true' : 'false';
+
+    // La configurare iniţială "Continuă" porneşte blocat — se deblochează doar
+    // după o selecţie. La reconfigurare totul e pre-completat, deci rămâne liber.
+    document.getElementById('plant-next').disabled = !wiz.edit;
+    document.getElementById('soil-next').disabled = !wiz.edit;
+
     buildPlantStep();
     buildSoilStep();
     buildColorStep();
