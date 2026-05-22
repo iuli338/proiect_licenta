@@ -67,17 +67,17 @@
 
 .gpio-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-2);
 }
 
 .gpio-btn {
+  /* Compact: iconiţă + label pe un rând, starea în dreapta. */
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-5) var(--space-4);
-  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
   background: var(--color-bg-deep);
   border: 1px solid var(--color-border);
   color: var(--color-text-muted);
@@ -102,13 +102,14 @@
 .gpio-btn__icon {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
 }
 
 .gpio-btn__icon svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
 }
 
 .gpio-btn__label {
@@ -116,7 +117,9 @@
   font-size: var(--fs-sm);
 }
 
+/* Starea — împinsă în dreapta cardului. */
 .gpio-btn__state {
+  margin-left: auto;
   font-family: var(--font-mono);
   font-size: var(--fs-xs);
   letter-spacing: var(--tracking-wide);

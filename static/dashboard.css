@@ -189,79 +189,13 @@
   gap: var(--space-4);
 }
 
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-soft);
-  font-family: var(--font-mono);
-  font-size: var(--fs-xs);
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
+/* Punct de stare — folosit de banner-ul "hub offline" din tab-ul Control. */
 .status-pill__led {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: var(--color-text-faint);
   flex-shrink: 0;
-}
-
-.status-pill--online .status-pill__led {
-  background: var(--color-mint);
-  box-shadow: 0 0 8px var(--color-mint);
-}
-
-.status-pill--offline .status-pill__led {
-  background: #ef6464;
-  box-shadow: 0 0 6px rgba(239, 100, 100, 0.6);
-}
-
-.status-pill--pending .status-pill__led {
-  background: #ffcc66;
-  box-shadow: 0 0 6px rgba(255, 204, 102, 0.6);
-  animation: pulse-led 1.2s ease-in-out infinite;
-}
-
-@keyframes pulse-led {
-  0%, 100% { opacity: 1;   }
-  50%      { opacity: 0.4; }
-}
-
-.user-menu {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding-left: var(--space-4);
-  border-left: 1px solid var(--color-border-soft);
-}
-
-.user-menu__logout {
-  display: inline-grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  background: none;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  color: var(--color-text-faint);
-  transition: color var(--dur-fast) var(--ease-out),
-              background-color var(--dur-fast) var(--ease-out);
-}
-
-.user-menu__logout:hover {
-  color: var(--color-text);
-  background: var(--color-surface);
-}
-
-.user-menu__logout svg {
-  width: 16px;
-  height: 16px;
 }
 
 /* ---------- 3. Conţinut tab ---------- */
@@ -290,7 +224,7 @@
 
 .tab-header__title {
   font-family: var(--font-display);
-  font-size: clamp(var(--fs-xl), 3vw, var(--fs-2xl));
+  font-size: clamp(var(--fs-lg), 2.4vw, var(--fs-xl));
   font-weight: 600;
   letter-spacing: -0.015em;
   margin-top: var(--space-2);
@@ -298,7 +232,7 @@
 
 .tab-header__lead {
   margin-top: var(--space-3);
-  font-size: var(--fs-md);
+  font-size: var(--fs-sm);
   color: var(--color-text-muted);
   max-width: 60ch;
 }

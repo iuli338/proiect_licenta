@@ -70,6 +70,9 @@
       if (r.ok && j.ok) {
         // Cod corect — cookie-ul a fost setat de server.
         authenticated = true;
+        if (window.Dropwise && window.Dropwise.refreshTabLock) {
+          window.Dropwise.refreshTabLock();
+        }
         el.dialog.close();
         if (onSuccess) {
           // Continuăm fluxul care a cerut codul (ex: butonul Conectare).
@@ -92,15 +95,6 @@
     }
   }
 
-  // ---------- Logout ----------
-
-  async function logout() {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } catch (e) { /* oricum reîncărcăm */ }
-    location.reload();
-  }
-
   // ---------- Stare la încărcare ----------
 
   async function checkStatus() {
@@ -110,6 +104,11 @@
       authenticated = !!j.authorized;
     } catch (e) {
       authenticated = false;
+    }
+
+    // Starea de autentificare s-a stabilit — re-evaluăm blocarea taburilor.
+    if (window.Dropwise && window.Dropwise.refreshTabLock) {
+      window.Dropwise.refreshTabLock();
     }
 
     // Dialogul de cod apare la încărcare DOAR pentru un utilizator care
@@ -142,10 +141,6 @@
 
     // Dialogul de cod nu poate fi închis cu Esc — codul e obligatoriu.
     el.dialog.addEventListener('cancel', (ev) => ev.preventDefault());
-
-    // Butonul de deconectare din topbar.
-    const btnLogout = document.getElementById('btn-logout');
-    if (btnLogout) btnLogout.addEventListener('click', logout);
 
     // Expunem deschiderea dialogului pentru alte module (ex: butonul
     // "Conectare" din Initial Setup).

@@ -14,8 +14,11 @@
   const DEFAULT_TAB = 'setup';
 
   function getTabFromHash() {
+    // Hash-ul poate avea sub-căi: "#nodes/P1/stats". Tab-ul e primul
+    // segment; restul e gestionat de modulul tabului (ex: nodes.js).
     const hash = (window.location.hash || '').replace('#', '');
-    return VALID_TABS.includes(hash) ? hash : DEFAULT_TAB;
+    const tab = hash.split('/')[0];
+    return VALID_TABS.includes(tab) ? tab : DEFAULT_TAB;
   }
 
   // Un tab e "blocat" cât timp hub-ul nu a fost configurat (data-lockable
@@ -43,8 +46,11 @@
       panel.dataset.active = panel.id === 'panel-' + name ? 'true' : 'false';
     });
 
-    // Sincronizez hash-ul fără să declanșez scroll
-    if (window.location.hash.replace('#', '') !== name) {
+    // Sincronizez hash-ul. Dacă hash-ul curent e deja pe acest tab (cu sau
+    // fără sub-cale, ex: "nodes/P1/stats"), îl las neatins — sub-calea e
+    // gestionată de modulul tabului. Doar la schimbare de tab îl rescriu.
+    const curTab = window.location.hash.replace('#', '').split('/')[0];
+    if (curTab !== name) {
       history.replaceState(null, '', '#' + name);
     }
 
@@ -66,85 +72,53 @@
     activateTab(getTabFromHash());
   }
 
-  // ---------- Status hub în topbar ----------
+  // Starea hub-ului se afişează acum într-un card pe tab-ul Monitor
+  // (vezi nodes-grid.js), nu în topbar.
 
-  const STATUS_POLL_MS = 3000;
-  let pollTimer = null;
+  // ---------- Blocarea taburilor ----------
+  //
+  // Taburile Monitor/Noduri/Control/Setări sunt accesibile doar când hub-ul
+  // e provizionat ŞI codul de acces a fost introdus. Altfel rămân disabled —
+  // n-ar funcţiona oricum (API-urile dau 404 fără cod).
 
-  async function pollHubStatus() {
-    const pill = document.querySelector('#hub-status');
-    const label = document.querySelector('#hub-status-label');
-    if (!pill || !label) return;
-
-    // Fără cod de acces / fără hub provizionat — nu interogăm hub-ul
-    // (am primi doar 404). Afişăm starea "neconfigurat".
-    if (!(window.Dropwise && window.Dropwise.canUseHub
-          && window.Dropwise.canUseHub())) {
-      pill.className = 'status-pill status-pill--pending';
-      label.textContent = 'hub neconfigurat';
-      return;
-    }
-
-    try {
-      const r = await fetch('/api/hub/status', { cache: 'no-store' });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
-      const j = await r.json();
-
-      if (j.online) {
-        pill.className = 'status-pill status-pill--online';
-        label.textContent = 'hub online';
-      } else if (j.error === 'hub_ip_not_set') {
-        pill.className = 'status-pill status-pill--pending';
-        label.textContent = 'hub neconfigurat';
-      } else {
-        pill.className = 'status-pill status-pill--offline';
-        label.textContent = 'hub offline';
-      }
-    } catch (e) {
-      pill.className = 'status-pill status-pill--offline';
-      label.textContent = 'eroare';
-    }
+  function tabsProvisioned() {
+    const tabs = document.querySelector('.tabs');
+    return !!(tabs && tabs.dataset.provisioned === 'true');
   }
 
-  function startPolling() {
-    pollHubStatus();
-    pollTimer = setInterval(pollHubStatus, STATUS_POLL_MS);
+  function tabsAuthenticated() {
+    return !!(window.Dropwise && window.Dropwise.isAuthenticated
+              && window.Dropwise.isAuthenticated());
   }
 
-  function stopPolling() {
-    if (pollTimer) {
-      clearInterval(pollTimer);
-      pollTimer = null;
-    }
-  }
-
-  // Opresc polling-ul când tab-ul browserului e în background
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) stopPolling();
-    else startPolling();
-  });
-
-  // ---------- API public pentru taburile individuale ----------
-
-  // Deblochează toate taburile (apelat de setup.js după prima conectare
-  // reuşită a hub-ului).
-  function unlockTabs() {
+  /** Re-evaluează blocarea taburilor după starea curentă. */
+  function refreshTabLock() {
+    const unlocked = tabsProvisioned() && tabsAuthenticated();
     document.querySelectorAll('.tab[data-lockable]').forEach((btn) => {
-      btn.disabled = false;
-      btn.removeAttribute('aria-disabled');
+      btn.disabled = !unlocked;
+      if (unlocked) btn.removeAttribute('aria-disabled');
+      else btn.setAttribute('aria-disabled', 'true');
     });
+  }
+
+  /** Marchează hub-ul ca provizionat şi re-evaluează blocarea. */
+  function markProvisioned() {
     const tabs = document.querySelector('.tabs');
     if (tabs) tabs.dataset.provisioned = 'true';
+    refreshTabLock();
   }
 
   window.Dropwise = window.Dropwise || {};
-  window.Dropwise.unlockTabs = unlockTabs;
   window.Dropwise.activateTab = activateTab;
+  // markProvisioned — apelat de setup.js după "Conectare".
+  window.Dropwise.unlockTabs = markProvisioned;
+  // refreshTabLock — apelat de auth.js după ce codul a fost validat.
+  window.Dropwise.refreshTabLock = refreshTabLock;
 
   // ---------- Init ----------
 
   document.addEventListener('DOMContentLoaded', () => {
     initTabs();
-    startPolling();
+    refreshTabLock();   // stare iniţială (poate fi deja provizionat din server)
   });
 })();

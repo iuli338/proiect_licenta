@@ -293,17 +293,27 @@
 .wizard__steps li {
   flex: 1;
   display: flex;
+}
+
+/* Fiecare pas — buton (clicabil doar în mod editare). */
+.wizard__step {
+  flex: 1;
+  display: flex;
   align-items: center;
   gap: var(--space-2);
+  background: none;
+  font-family: var(--font-body);
   font-size: var(--fs-xs);
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--color-text-faint);
   padding-bottom: var(--space-2);
+  border: none;
   border-bottom: 2px solid var(--color-border-soft);
+  cursor: default;
 }
 
-.wizard__steps li::before {
+.wizard__step::before {
   counter-increment: wstep;
   content: counter(wstep);
   display: grid;
@@ -316,14 +326,23 @@
 }
 
 /* Pasul activ */
-.wizard__steps li[data-active='true'] {
+.wizard__step[data-active='true'] {
   color: var(--color-text);
   border-bottom-color: var(--color-mint);
 }
 
-.wizard__steps li[data-active='true']::before {
+.wizard__step[data-active='true']::before {
   background: var(--color-mint);
   color: var(--color-text-on-mint);
+}
+
+/* În mod editare, paşii devin clicabili. */
+.wizard[data-edit='true'] .wizard__step {
+  cursor: pointer;
+}
+
+.wizard[data-edit='true'] .wizard__step:hover {
+  color: var(--color-text);
 }
 
 .wizard__actions {
@@ -539,4 +558,124 @@
 .color-swatch[aria-selected='true'] {
   border-color: var(--color-text);
   box-shadow: 0 0 0 2px var(--color-bg-deep) inset;
+}
+
+/* ---------- 8. Vedere statistici nod ---------- */
+
+/* Bloc normal — copiii (butonul de revenire) îşi păstrează lăţimea
+   proprie, nu se întind ca într-un container flex. */
+.node-stats {
+  display: block;
+}
+
+/* Lista de statistici — perechi etichetă / valoare. */
+.stats-list {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0;
+  margin-top: var(--space-4);
+}
+
+.stats-list__label,
+.stats-list__value {
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border-soft);
+  font-size: var(--fs-sm);
+}
+
+.stats-list__label {
+  color: var(--color-text-muted);
+}
+
+.stats-list__value {
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* Ultima pereche — fără linie de jos. */
+.stats-list__label:last-of-type,
+.stats-list__value:last-of-type {
+  border-bottom: none;
+}
+
+
+/* ---------- 9. Card de stare hub (Monitor) ---------- */
+
+.hub-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+/* LED-ul de stare — culoarea vine din data-state. */
+.hub-card__led {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--color-text-faint);
+}
+
+.hub-card[data-state='online'] .hub-card__led {
+  background: var(--color-mint);
+  box-shadow: 0 0 10px var(--color-mint);
+}
+.hub-card[data-state='offline'] .hub-card__led {
+  background: #ef6464;
+  box-shadow: 0 0 8px rgba(239, 100, 100, 0.6);
+}
+.hub-card[data-state='pending'] .hub-card__led {
+  background: #ffcc66;
+}
+
+.hub-card__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.hub-card__state {
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.hub-card__detail {
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+/* Meta — IP + canal WiFi, în dreapta. */
+.hub-card__meta {
+  display: flex;
+  gap: var(--space-6);
+  flex-shrink: 0;
+}
+
+.hub-card__meta-item dt {
+  font-size: var(--fs-xs);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+
+.hub-card__meta-item dd {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-sm);
+  color: var(--color-text);
+}
+
+/* Pe ecrane înguste — meta trece sub textul de stare. */
+@media (max-width: 560px) {
+  .hub-card {
+    flex-wrap: wrap;
+  }
+  .hub-card__meta {
+    width: 100%;
+    padding-left: calc(12px + var(--space-4));
+  }
 }
