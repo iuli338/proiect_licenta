@@ -28,7 +28,8 @@ if getattr(sys, "frozen", False):
     import os
     os.chdir(app_dir)
 
-from app import app, load_state   # noqa: E402 — după chdir
+from app import app              # noqa: E402 — după chdir
+from core import load_state      # noqa: E402
 
 PORT = 5000
 

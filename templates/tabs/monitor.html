@@ -1,0 +1,33 @@
+    {# ===== TAB 2: Monitorizare ===== #}
+    <section id="panel-monitor" class="tab-panel" role="tabpanel" data-active="false">
+      <header class="tab-header">
+        <p class="eyebrow">Monitorizare</p>
+        <h1 class="tab-header__title">Stare hub & noduri</h1>
+        <p class="tab-header__lead">
+          Vezi în timp real ce noduri sunt conectate şi starea fiecărui ghiveci.
+          Nodurile neconfigurate nu sunt udate până nu le configurezi.
+        </p>
+      </header>
+
+      {# Card de stare hub — LED + stare + IP + canal WiFi. Populat din JS. #}
+      <div id="hub-card" class="hub-card panel" data-state="pending">
+        <span class="hub-card__led" aria-hidden="true"></span>
+        <div class="hub-card__main">
+          <p class="hub-card__state" id="hub-card-state">Se verifică hub-ul…</p>
+          <p class="hub-card__detail" id="hub-card-detail"></p>
+        </div>
+        <dl class="hub-card__meta">
+          <div class="hub-card__meta-item">
+            <dt>Adresă IP</dt>
+            <dd id="hub-card-ip">—</dd>
+          </div>
+          <div class="hub-card__meta-item">
+            <dt>Canal WiFi</dt>
+            <dd id="hub-card-channel">—</dd>
+          </div>
+        </dl>
+      </div>
+
+      {# Grila de carduri noduri — populată din JS #}
+      <div id="node-grid" class="node-grid"></div>
+    </section>

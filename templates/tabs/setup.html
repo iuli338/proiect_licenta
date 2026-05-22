@@ -1,0 +1,181 @@
+    {# ===== TAB 1: Initial Setup ===== #}
+    <section id="panel-setup" class="tab-panel" role="tabpanel" data-active="true">
+      <header class="tab-header">
+        <p class="eyebrow">Configurare iniţială</p>
+        <h1 class="tab-header__title">Conectează hub-ul la reţea</h1>
+        <p class="tab-header__lead">
+          Detectează hub-ul prin Bluetooth, transmite-i credenţialele reţelei tale WiFi
+          și salvează IP-ul pentru conectările ulterioare.
+        </p>
+      </header>
+
+      {# Containerul pasului de provisioning. data-step controlează ce
+         sub-secţiune e vizibilă: scan → form → working → done.
+         data-busy=true peste tot dezactivează interacţiunea + arată loading. #}
+      <div id="setup-flow" class="setup-flow"
+           data-step="scan"
+           data-provisioned="{{ 'true' if provisioned else 'false' }}">
+
+        {# ---- PASUL A: Scanare BLE ---- #}
+        <div class="panel setup-card" data-setup-section="scan">
+          <div class="panel__header">
+            <div>
+              <h2 class="panel__title">1 · Detectează hub-ul</h2>
+              <p class="panel__subtitle">
+                Asigură-te că hub-ul este pornit. Va apărea sub numele
+                <code>Dropwise HUB</code>.
+              </p>
+            </div>
+            <button type="button" id="btn-scan" class="btn btn--ghost">
+              <span class="btn__label">Scanează Bluetooth</span>
+            </button>
+          </div>
+
+          {# Lista de dispozitive găsite — populată din JS #}
+          <ul id="device-list" class="device-list" role="list" hidden></ul>
+
+          {# Mesaj gol / stare scanare #}
+          <p id="scan-hint" class="setup-hint">
+            Apasă „Scanează Bluetooth" pentru a căuta hub-uri în apropiere.
+          </p>
+        </div>
+
+        {# ---- PASUL B: Credenţiale WiFi ---- #}
+        <div class="panel setup-card" data-setup-section="form" hidden>
+          <div class="panel__header">
+            <div>
+              <h2 class="panel__title">2 · Credenţiale WiFi</h2>
+              <p class="panel__subtitle">
+                Hub selectat: <strong id="selected-device-name">—</strong>
+              </p>
+            </div>
+          </div>
+
+          <form id="provision-form" class="setup-form" autocomplete="off">
+            <div class="field">
+              <label class="field__label" for="wifi-ssid">Reţea WiFi (SSID)</label>
+              <input class="field__input" type="text" id="wifi-ssid"
+                     name="ssid" placeholder="Numele reţelei" required />
+            </div>
+            <div class="field">
+              <label class="field__label" for="wifi-pass">Parolă WiFi</label>
+              <input class="field__input" type="password" id="wifi-pass"
+                     name="password" placeholder="Parola reţelei" />
+            </div>
+
+            <div class="setup-form__actions">
+              <button type="button" id="btn-back" class="btn btn--ghost">
+                Înapoi
+              </button>
+              <button type="submit" id="btn-provision" class="btn btn--primary">
+                <span class="btn__label">Trimite către hub</span>
+                <span class="btn__arrow" aria-hidden="true">→</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {# ---- PASUL C: Aşteptare conectare (loading) ---- #}
+        <div class="panel setup-card setup-card--working"
+             data-setup-section="working" hidden>
+          <div class="setup-working">
+            <span class="setup-spinner" aria-hidden="true"></span>
+            <div>
+              <p class="setup-working__title" id="working-title">
+                Se conectează hub-ul la reţea…
+              </p>
+              <p class="setup-working__msg" id="working-msg">
+                Transmitem credenţialele prin Bluetooth.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {# ---- PASUL D: Succes / finalizare ---- #}
+        <div class="panel setup-card setup-card--done"
+             data-setup-section="done" hidden>
+          <div class="setup-done">
+            <span class="setup-done__check" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6 L9 17 l-5 -5"/>
+              </svg>
+            </span>
+            <div>
+              <p class="setup-done__title">Hub conectat cu succes</p>
+              <p class="setup-done__msg" id="done-msg">
+                Hub-ul este online în reţea.
+              </p>
+            </div>
+          </div>
+
+          <div class="setup-done__actions">
+            <button type="button" id="btn-connect" class="btn btn--primary btn--lg">
+              <span class="btn__label">Conectare</span>
+              <span class="btn__arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+          <p class="setup-hint">
+            La apăsare salvăm adresa IP a hub-ului şi deblocăm restul taburilor.
+          </p>
+        </div>
+
+        {# ---- PASUL E: Hub deja configurat (stare persistentă) ----
+           Vizibil când hub-ul a fost deja conectat — la încărcarea paginii
+           dacă provisioned=True, sau imediat după apăsarea "Conectare". #}
+        <div class="panel setup-card setup-card--connected"
+             data-setup-section="connected" hidden>
+          <div class="hub-status-card">
+            <span class="hub-status-card__badge" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6 L9 17 l-5 -5"/>
+              </svg>
+            </span>
+            <div class="hub-status-card__head">
+              <p class="hub-status-card__title">Hub conectat</p>
+              <p class="hub-status-card__subtitle">
+                Hub-ul este aprovizionat şi online în reţeaua locală.
+              </p>
+            </div>
+          </div>
+
+          <dl class="hub-status-card__details">
+            <div class="hub-detail">
+              <dt class="hub-detail__label">Adresă IP</dt>
+              <dd class="hub-detail__value" id="connected-ip">
+                {{ hub_ip or '—' }}
+              </dd>
+            </div>
+            <div class="hub-detail">
+              <dt class="hub-detail__label">Reţea WiFi</dt>
+              <dd class="hub-detail__value" id="connected-ssid">
+                {{ hub_ssid or '—' }}
+              </dd>
+            </div>
+          </dl>
+
+          <div class="hub-status-card__actions">
+            <button type="button" id="btn-reconfigure" class="btn btn--ghost">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="16" height="16">
+                <path d="M21 12 a 9 9 0 1 1 -2.64 -6.36"/>
+                <path d="M21 4 v5 h-5"/>
+              </svg>
+              <span>Reconfigurează</span>
+            </button>
+          </div>
+          <p class="setup-hint">
+            Reconfigurarea reia detecţia Bluetooth pentru a conecta hub-ul
+            la o altă reţea.
+          </p>
+        </div>
+
+        {# Mesaj de eroare — vizibil doar la eşec, în orice pas #}
+        <div id="setup-error" class="setup-error" role="alert" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 8 v4"/>
+            <circle cx="12" cy="16" r="0.5" fill="currentColor"/>
+          </svg>
+          <span id="setup-error-msg">A apărut o eroare.</span>
+        </div>
+      </div>
+    </section>

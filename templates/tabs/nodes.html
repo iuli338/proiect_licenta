@@ -1,0 +1,201 @@
+    {# ===== TAB 3: Configurare nod ===== #}
+    <section id="panel-nodes" class="tab-panel" role="tabpanel" data-active="false">
+      {# Antetul tabului — ascuns cât timp wizardul e deschis. #}
+      <header class="tab-header" id="nodes-header">
+        <p class="eyebrow">Configurare per ghiveci</p>
+        <h1 class="tab-header__title">Configurează un nod</h1>
+        <p class="tab-header__lead">
+          Alege nodul, apoi parcurge paşii: planta, solul, parametrii rezultaţi
+          şi culoarea cardului.
+        </p>
+      </header>
+
+      {# Grila de carduri noduri — aceeaşi ca pe Monitor. La "Configurează"
+         cardurile se ascund şi apare wizardul. #}
+      <div id="nodes-grid" class="node-grid"></div>
+
+      {# Wizardul. data-step controlează pasul vizibil. #}
+      <div id="wizard" class="wizard" data-step="plant" hidden>
+
+        {# Buton de revenire — închide wizardul, readuce cardurile #}
+        <button type="button" id="wizard-close" class="wizard__close">
+          <span aria-hidden="true">←</span> Selectează alt nod
+        </button>
+
+        {# Nodul — "Configurare"/"Reconfigurare" + numele nodului #}
+        <p class="wizard__node">
+          <span id="wizard-title-word">Configurare</span> ·
+          <strong id="wizard-node-name">—</strong>
+        </p>
+
+        {# Indicator de pas — în mod editare paşii sunt butoane clicabile #}
+        <ol class="wizard__steps">
+          <li><button type="button" class="wizard__step" data-wstep="plant">Plantă</button></li>
+          <li><button type="button" class="wizard__step" data-wstep="soil">Sol</button></li>
+          <li><button type="button" class="wizard__step" data-wstep="summary">Sumar</button></li>
+          <li><button type="button" class="wizard__step" data-wstep="color">Culoare</button></li>
+        </ol>
+
+        {# ---- PAS 1: Planta ---- #}
+        <div class="panel wizard__panel" data-wizard-section="plant">
+          <h2 class="panel__title">Ce plantă este în acest ghiveci?</h2>
+          <p class="panel__subtitle">
+            Alege din listă sau adaugă o plantă proprie.
+          </p>
+          <div id="plant-list" class="choice-grid"></div>
+
+          {# Formular plantă custom — ascuns până se alege "Altă plantă" #}
+          <div id="plant-custom" class="custom-form" hidden>
+            <div class="field">
+              <label class="field__label" for="plant-custom-name">
+                Numele plantei
+              </label>
+              <input class="field__input" type="text" id="plant-custom-name"
+                     placeholder="ex: Orhidee" />
+            </div>
+            <div class="field">
+              <label class="field__label">Necesar de apă</label>
+              <div class="level-pick" data-level="water">
+                <button type="button" data-value="scazut">Scăzut</button>
+                <button type="button" data-value="mediu">Mediu</button>
+                <button type="button" data-value="ridicat">Ridicat</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="wizard__actions">
+            <span></span>
+            <button type="button" id="plant-next" class="btn btn--primary" disabled>
+              Continuă <span class="btn__arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+
+        {# ---- PAS 2: Solul ---- #}
+        <div class="panel wizard__panel" data-wizard-section="soil" hidden>
+          <h2 class="panel__title">Ce tip de sol foloseşti?</h2>
+          <p class="panel__subtitle">
+            Solul influenţează cât de des şi câtă apă primeşte planta.
+          </p>
+          <div id="soil-list" class="choice-grid"></div>
+
+          <div id="soil-custom" class="custom-form" hidden>
+            <div class="field">
+              <label class="field__label" for="soil-custom-name">
+                Numele solului
+              </label>
+              <input class="field__input" type="text" id="soil-custom-name"
+                     placeholder="ex: Amestec propriu" />
+            </div>
+            <div class="field">
+              <label class="field__label">Retenţia apei</label>
+              <div class="level-pick" data-level="retention">
+                <button type="button" data-value="scazut">Scăzută</button>
+                <button type="button" data-value="mediu">Medie</button>
+                <button type="button" data-value="ridicat">Ridicată</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="wizard__actions">
+            <button type="button" id="soil-back" class="btn btn--ghost">Înapoi</button>
+            <button type="button" id="soil-next" class="btn btn--primary" disabled>
+              Continuă <span class="btn__arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+
+        {# ---- PAS 3: Sumar parametri ---- #}
+        <div class="panel wizard__panel" data-wizard-section="summary" hidden>
+          <h2 class="panel__title">Ce va face sistemul</h2>
+          <p class="panel__subtitle">
+            Pe baza alegerilor tale, regulatorul nodului va fi setat astfel.
+            Aceşti parametri pot fi modificaţi şi mai târziu.
+          </p>
+          <ul id="summary-list" class="summary-list"></ul>
+          <div class="wizard__actions">
+            <button type="button" id="summary-back" class="btn btn--ghost">Înapoi</button>
+            <button type="button" id="summary-next" class="btn btn--primary">
+              Continuă <span class="btn__arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+
+        {# ---- PAS 4: Culoare card ---- #}
+        <div class="panel wizard__panel" data-wizard-section="color" hidden>
+          <h2 class="panel__title">Personalizează cardul</h2>
+          <p class="panel__subtitle">
+            Alege o culoare — va influenţa aspectul cardului pe dashboard.
+          </p>
+          <div id="color-list" class="color-grid"></div>
+          <div class="wizard__actions">
+            <button type="button" id="color-back" class="btn btn--ghost">Înapoi</button>
+            <button type="button" id="color-finish" class="btn btn--primary">
+              Trimite la nod <span class="btn__arrow" aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+
+        {# ---- Loading: trimitere către ESP32 ---- #}
+        <div class="panel wizard__panel" data-wizard-section="working" hidden>
+          <div class="setup-working">
+            <span class="setup-spinner" aria-hidden="true"></span>
+            <div>
+              <p class="setup-working__title">Se trimite configuraţia…</p>
+              <p class="setup-working__msg" id="wizard-working-msg">
+                Transmitem datele către nod.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {# ---- Confirmare ---- #}
+        <div class="panel wizard__panel setup-card--done" data-wizard-section="done" hidden>
+          <div class="setup-done">
+            <span class="setup-done__check" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6 L9 17 l-5 -5"/>
+              </svg>
+            </span>
+            <div>
+              <p class="setup-done__title">Configurare finalizată</p>
+              <p class="setup-done__msg">
+                Nodul a primit configuraţia. Cardul afişează acum datele live.
+              </p>
+            </div>
+          </div>
+          <div class="setup-done__actions">
+            <button type="button" id="wizard-to-monitor" class="btn btn--primary btn--lg">
+              Înapoi la monitor
+            </button>
+          </div>
+        </div>
+
+        {# Eroare wizard #}
+        <div id="wizard-error" class="setup-error" role="alert" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 8 v4"/>
+            <circle cx="12" cy="16" r="0.5" fill="currentColor"/>
+          </svg>
+          <span id="wizard-error-msg">A apărut o eroare.</span>
+        </div>
+      </div>
+
+      {# Vedere statistici nod — ascunsă; apare din meniul ⋯ "Vezi statistici" #}
+      <div id="node-stats" class="node-stats" hidden>
+        <button type="button" id="stats-close" class="wizard__close">
+          <span aria-hidden="true">←</span> Înapoi la noduri
+        </button>
+
+        <p class="wizard__node">
+          Statistici · <strong id="stats-node-name">—</strong>
+        </p>
+
+        <div class="panel">
+          <h2 class="panel__title" id="stats-plant">—</h2>
+          <p class="panel__subtitle" id="stats-soil">—</p>
+          <dl id="stats-list" class="stats-list"></dl>
+        </div>
+      </div>
+    </section>

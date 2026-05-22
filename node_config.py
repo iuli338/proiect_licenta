@@ -347,5 +347,71 @@ def build_node_config(payload: dict) -> tuple[Optional[dict], Optional[str]]:
         "color": color,
         "regulator": regulator,
         "configured": True,
+        # Momentul configurării — folosit ca "dată de creare" în statistici.
+        "created_at": time.time(),
     }
     return config, None
+
+
+# ---------------------------------------------------------------- statistici
+
+def _mock_stats(node: str, config: dict) -> dict:
+    """
+    Statistici simulate pentru un nod (mod test). Valorile sunt STABILE per
+    nod — derivate determinist din numele nodului — ca să nu sară la fiecare
+    cerere. În modul live, datele reale vor veni din EEPROM-ul nodului.
+    """
+    # Sămânţă deterministă din numele nodului.
+    seed = sum(ord(c) for c in node)
+    waterings = 40 + seed % 120          # număr total de udări
+    dose = config.get("regulator", {}).get("dose_ml", 110)
+    total_ml = waterings * dose
+    uptime_days = 5 + seed % 60
+
+    created = config.get("created_at") or (time.time() - uptime_days * 86400)
+
+    return {
+        "created_at": created,
+        "last_seen": time.time() - (seed % 30) * 60,   # acum câteva minute
+        "uptime_days": uptime_days,
+        "total_waterings": waterings,
+        "total_ml": total_ml,
+        "avg_ml_per_watering": dose,
+        "last_watering": time.time() - (seed % 18) * 3600,
+        "mock": True,
+    }
+
+
+def get_node_stats(node: str, config: Optional[dict],
+                   hub_ip: Optional[str] = None) -> Optional[dict]:
+    """
+    Returnează statisticile unui nod.
+      - mock: valori simulate stabile (vezi _mock_stats).
+      - real: cere statisticile de la hub. ESP32-ul administrează totul în
+        EEPROM (nr. udări, ml, ultima conectare) — serverul doar le transmite
+        mai departe, iar frontend-ul le afişează.
+    Returnează None dacă nodul nu are configuraţie.
+    """
+    if not config or not config.get("configured"):
+        return None
+
+    if get_hub_mode() == "mock":
+        return _mock_stats(node, config)
+
+    # --- mod real: statisticile vin de la hub (EEPROM nod) ---
+    if not hub_ip:
+        return None
+    try:
+        import requests
+    except ImportError:
+        return None
+    try:
+        # TODO(live): endpoint pe firmware-ul hub-ului care citeşte
+        # statisticile din EEPROM-ul nodului.
+        r = requests.get(f"http://{hub_ip}/node/{node}/stats", timeout=3)
+        r.raise_for_status()
+        data = r.json()
+        data["mock"] = False
+        return data
+    except Exception:   # noqa: BLE001 — hub indisponibil / firmware fără endpoint
+        return None

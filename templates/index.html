@@ -18,7 +18,7 @@
   <!-- ============== NAVBAR ============== -->
   <header class="container">
     <nav class="nav anim-fade">
-      <a href="{{ url_for('home') }}" class="nav__brand" aria-label="Dropwise — acasă">
+      <a href="{{ url_for('pages.home') }}" class="nav__brand" aria-label="Dropwise — acasă">
         <span class="nav__brand-mark" aria-hidden="true">
           <!-- frunză stilizată -->
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -30,7 +30,7 @@
       </a>
 
       <ul class="nav__links" role="list">
-        <li><a href="{{ url_for('home') }}"     class="nav__link" aria-current="page">Acasă</a></li>
+        <li><a href="{{ url_for('pages.home') }}"     class="nav__link" aria-current="page">Acasă</a></li>
         <li><a href="#functii"       class="nav__link">Funcționalități</a></li>
         <li><a href="#despre"        class="nav__link">Despre proiect</a></li>
         <li><a href="#dashboard-cta" class="nav__link">Dashboard</a></li>
@@ -151,7 +151,7 @@
       </p>
 
       <div class="cta__button-wrap">
-        <a href="{{ url_for('dashboard') }}" class="btn btn--primary btn--xl" aria-label="Deschide dashboard-ul sistemului">
+        <a href="{{ url_for('pages.dashboard') }}" class="btn btn--primary btn--xl" aria-label="Deschide dashboard-ul sistemului">
           Deschide Dashboard
           <span class="btn__arrow" aria-hidden="true">→</span>
         </a>
