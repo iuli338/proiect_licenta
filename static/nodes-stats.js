@@ -32,8 +32,15 @@
   /**
    * Aplică ruta din hash pentru tabul Noduri.
    * Forme: nodes | nodes/<P>/config | nodes/<P>/stats
+   *
+   * Garda `applyingHash` trebuie să acopere TOATĂ operaţia, inclusiv
+   * await-urile din openWizard/openNodeStats — altfel deschiderea cedează
+   * controlul la primul await, garda se ridică, iar activateTab() apelat
+   * dinăuntru re-declanşează applyNodesHash → buclă infinită de fetch-uri.
    */
-  nodes.applyNodesHash = function () {
+  nodes.applyNodesHash = async function () {
+    if (applyingHash) return;
+
     const parts = window.location.hash.replace('#', '').split('/');
     if (parts[0] !== 'nodes') return;
 
@@ -42,9 +49,9 @@
     applyingHash = true;
     try {
       if (node && view === 'stats') {
-        nodes.openNodeStats(node);
+        await nodes.openNodeStats(node);
       } else if (node && view === 'config') {
-        nodes.openWizardForReconfigure(node);
+        await nodes.openWizardForReconfigure(node);
       } else {
         closeSubViews();
       }
