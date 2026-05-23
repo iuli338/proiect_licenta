@@ -1,5 +1,7 @@
     {# ===== TAB 2: Monitorizare ===== #}
     <section id="panel-monitor" class="tab-panel" role="tabpanel" data-active="false">
+      {# Conţinutul standard al tab-ului — ascuns când e afişat graficul. #}
+      <div id="monitor-main">
       <header class="tab-header">
         <p class="eyebrow">Monitorizare</p>
         <h1 class="tab-header__title">Stare hub & noduri</h1>
@@ -26,8 +28,81 @@
             <dd id="hub-card-channel">—</dd>
           </div>
         </dl>
+        <button type="button" id="btn-diagnostics"
+                class="btn btn--ghost hub-card__diag">
+          Vezi diagnostica
+        </button>
       </div>
 
       {# Grila de carduri noduri — populată din JS #}
       <div id="node-grid" class="node-grid"></div>
+      </div>{# /#monitor-main #}
+
+      {# ============================================
+         Pagina Grafic — afişată când utilizatorul apasă "Vezi grafic"
+         pe un card de nod. Ascunde restul Monitor-ului.
+         ============================================ #}
+      <div id="node-graph" hidden>
+        <button type="button" id="graph-close" class="wizard__close">
+          <span aria-hidden="true">←</span> Înapoi la monitor
+        </button>
+        <div class="graph-header">
+          <p class="wizard__node graph-header__title">
+            Grafice date senzori pentru <strong id="graph-node-name">—</strong>
+            <span class="wizard__node-sub">· 24 ore</span>
+          </p>
+          <button type="button" id="graph-download-csv"
+                  class="btn btn--ghost graph-header__csv">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                 aria-hidden="true">
+              <path d="M21 15 v 4 a 2 2 0 0 1 -2 2 H 5 a 2 2 0 0 1 -2 -2 v -4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>Descarcă CSV</span>
+          </button>
+        </div>
+
+        <div class="graph-grid graph-grid--row1">
+          <div class="panel graph-card">
+            <h3 class="graph-card__title">Umiditate sol</h3>
+            <div class="graph-card__canvas-wrap">
+              <canvas class="graph-card__canvas"
+                      data-metric="soil_moisture_pct"></canvas>
+            </div>
+          </div>
+          <div class="panel graph-card">
+            <h3 class="graph-card__title">Lumină</h3>
+            <div class="graph-card__canvas-wrap">
+              <canvas class="graph-card__canvas"
+                      data-metric="lux"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="graph-grid graph-grid--row2">
+          <div class="panel graph-card">
+            <h3 class="graph-card__title">Temp. sol</h3>
+            <div class="graph-card__canvas-wrap">
+              <canvas class="graph-card__canvas"
+                      data-metric="soil_temp_c"></canvas>
+            </div>
+          </div>
+          <div class="panel graph-card">
+            <h3 class="graph-card__title">Temp. aer</h3>
+            <div class="graph-card__canvas-wrap">
+              <canvas class="graph-card__canvas"
+                      data-metric="air_temp_c"></canvas>
+            </div>
+          </div>
+          <div class="panel graph-card">
+            <h3 class="graph-card__title">Umiditate aer</h3>
+            <div class="graph-card__canvas-wrap">
+              <canvas class="graph-card__canvas"
+                      data-metric="air_humidity_pct"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
     </section>

@@ -123,6 +123,85 @@ def api_node_job(job_id):
     return jsonify(job.to_dict())
 
 
+@bp.route("/api/node/<node_name>/history", methods=["GET"])
+@login_required
+def api_node_history(node_name):
+    """
+    Istoricul orar al senzorilor pentru un nod — 24 puncte (ultimele 24 ore).
+    În mock: generăm o serie deterministă plauzibilă (per nume nod) cu mici
+    oscilaţii zilnice. În real (TODO): proxy la /node/Pi/history pe hub.
+    """
+    if node_name not in VALID_NODE_NAMES:
+        return jsonify({"error": "nod invalid"}), 400
+
+    if nc.get_hub_mode() == "mock":
+        return jsonify(_mock_history(node_name))
+
+    # Mod real — proxy către hub.
+    state = load_state()
+    hub_ip = state["hub"].get("ip")
+    if not hub_ip:
+        return jsonify({"error": "hub_ip_not_set"}), 503
+    try:
+        import requests
+        r = requests.get(
+            f"http://{hub_ip}/node/{node_name}/history",
+            headers={"X-Access-Code": auth.current_code() or ""},
+            timeout=4,
+        )
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:   # noqa: BLE001
+        return jsonify({"error": str(e)}), 502
+
+
+def _mock_history(node_name: str) -> dict:
+    """24 puncte orare cu valori plauzibile, deterministe per nume nod.
+
+    Forme curbe:
+      - umiditate sol: scade lent în zi (uscare), poate avea un salt de
+        udare în jurul orei 9 (mock).
+      - temp sol/aer: cosinusoidă cu max la 14:00 şi min la 04:00.
+      - umiditate aer: invers — max noaptea, min ziua.
+      - lux: 0 noaptea, parabolică ziua, vârf la 12-14.
+    """
+    import math, time as _time
+    seed = sum(ord(c) for c in node_name)
+    now = int(_time.time())
+    samples = []
+    for i in range(24):
+        ts = now - (23 - i) * 3600          # 24h în urmă → acum
+        # ora locală 0-23 (folosim ora epoch UTC, simplu pentru mock).
+        hr = ((ts // 3600) + 3) % 24        # offset RO ~UTC+3 vară
+        # Cosinusoidă diurnă (zenit 14:00 = vârf):
+        diurnal = math.cos(math.pi * (hr - 14) / 12)   # +1 la 14:00, −1 la 02:00
+
+        # Umiditate sol: pornește high după udare, scade exponenţial.
+        moist0 = 70.0 + (seed % 10)
+        moist = moist0 * math.exp(-i / 30.0) + 30.0 + ((seed + i) % 4)
+        # Udare simulată în jurul orei 9 → bump
+        if hr == 9: moist += 20
+
+        soil_temp = 21.0 + 2.0 * diurnal + ((seed + i) % 3) * 0.3
+        air_temp  = 22.0 + 4.0 * diurnal + ((seed * 3 + i) % 3) * 0.3
+        air_hum   = 55.0 - 12.0 * diurnal + ((seed + i * 2) % 5)
+        # Lux: doar ziua (6-20), parabolic, vârf la 13.
+        lux = 0.0
+        if 6 <= hr <= 20:
+            x = (hr - 13) / 7.0
+            lux = max(0.0, 8000.0 * (1.0 - x * x)) + ((seed + i) % 200)
+
+        samples.append({
+            "ts": ts,
+            "soil_moisture_pct":  round(max(15.0, min(95.0, moist)), 1),
+            "soil_temp_c":        round(soil_temp, 1),
+            "air_temp_c":         round(air_temp, 1),
+            "air_humidity_pct":   round(max(20.0, min(90.0, air_hum)), 1),
+            "lux":                round(lux),
+        })
+    return {"node": node_name, "samples": samples, "mock": True}
+
+
 @bp.route("/api/node/<node_name>/reset", methods=["POST"])
 @login_required
 def api_node_reset(node_name):

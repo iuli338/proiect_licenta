@@ -152,6 +152,52 @@ def api_hub_logs():
     })
 
 
+@bp.route("/api/hub/diagnostics")
+@login_required
+def api_hub_diagnostics():
+    """
+    Diagnostic la boot — log-ul cu I2C scan, status EEPROM/OLED/RTC,
+    uptime curent. În mock returnăm date deterministe (utile pentru UI);
+    în real facem proxy către /diagnostics pe hub.
+    """
+    state = load_state()
+
+    if nodes.get_hub_mode() == "mock":
+        return jsonify({
+            "online": True,
+            "data": {
+                "uptime_ms": int((time.time() - _MOCK_START) * 1000),
+                "oled": True,
+                "eeprom": True,
+                "rtc": False,
+                "boot_log": (
+                    "=== Dropwise HUB boot (mock) ===\n"
+                    "Scanare I2C...\n"
+                    "Adrese gasite: 0x3C, 0x50\n"
+                    "EEPROM AT24C256 detectat la 0x50 (incercare 1) - OK\n"
+                    "EEPROM layout OK\n"
+                    "OLED  - OK\n"
+                    "EEPROM - OK\n"
+                    "RTC   - lipsa (optional)\n"
+                ),
+            },
+        })
+
+    hub_ip = state["hub"].get("ip")
+    if not hub_ip:
+        return jsonify({"online": False, "error": "hub_ip_not_set"}), 200
+    if requests is None:
+        return jsonify({"online": False, "error": "requests_not_installed"}), 500
+
+    try:
+        r = requests.get(f"http://{hub_ip}/diagnostics", timeout=3,
+                         headers=auth.hub_headers())
+        r.raise_for_status()
+        return jsonify({"online": True, "data": r.json()})
+    except requests.RequestException as e:
+        return jsonify({"online": False, "error": str(e)}), 200
+
+
 @bp.route("/api/hub/toggle/<int:pin>", methods=["POST"])
 @login_required
 def api_hub_toggle(pin):

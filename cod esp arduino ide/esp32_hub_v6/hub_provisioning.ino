@@ -266,6 +266,10 @@ void startNormalMode() {
   server.on("/auth", HTTP_POST,    handleAuth);
   server.on("/auth", HTTP_OPTIONS, handleOptions);
 
+  // Diagnostic — log de boot + status module (pentru butonul "Vezi diagnostica").
+  server.on("/diagnostics", HTTP_GET,     handleDiagnostics);
+  server.on("/diagnostics", HTTP_OPTIONS, handleOptions);
+
   // Toggle individual pe pini (din tab-ul Control)
   server.on("/toggle/16", HTTP_GET, handleToggle16);
   server.on("/toggle/17", HTTP_GET, handleToggle17);

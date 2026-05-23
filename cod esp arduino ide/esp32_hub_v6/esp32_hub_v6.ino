@@ -288,6 +288,19 @@ bool               eepromReady     = false;
 // permite nested guards fără să se rupă.
 volatile int       i2cBusyDepth    = 0;
 
+// ---------- Log diagnostic la boot ----------
+// Buffer in RAM (~2 KB) — păstrează tot ce s-a întâmplat în setup() pentru
+// a fi servit prin endpoint-ul /diagnostics. Vizibil în UI sub butonul
+// "Vezi diagnostica" pe cardul de stare hub.
+#define BOOT_LOG_SIZE      2048
+char               bootLog[BOOT_LOG_SIZE]  = {0};
+size_t             bootLogLen              = 0;
+
+// Status detectat la boot pentru fiecare modul I²C (folosit în diagnostic).
+bool               oledOk                  = false;
+bool               rtcOk                   = false;
+#define RTC_I2C_ADDR       0x68      // adresa standard DS1307/DS3231
+
 // ---------- Reconectare WiFi ----------
 // Dacă WiFi-ul cade după ce am intrat în mod normal, încercăm o reconectare
 // la fiecare 5 secunde, la infinit. OLED-ul afişează "Reconnecting..." în
@@ -295,6 +308,23 @@ volatile int       i2cBusyDepth    = 0;
 unsigned long      lastWifiReconnect = 0;
 
 #define WIFI_RECONNECT_GAP_MS    5000   // 5 s între încercări
+
+// ---------- Helper log boot ----------
+// Append la buffer-ul de log + mirror pe Serial. Dacă buffer-ul e plin,
+// noile mesaje sunt trunchiate (n-au de ce să fie atât de multe în setup).
+void bootLogf(const char* fmt, ...) {
+  if (bootLogLen >= BOOT_LOG_SIZE - 1) return;
+  va_list args;
+  va_start(args, fmt);
+  int n = vsnprintf(bootLog + bootLogLen,
+                    BOOT_LOG_SIZE - bootLogLen, fmt, args);
+  va_end(args);
+  if (n > 0) {
+    bootLogLen += n;
+    // Mirror simultan pe Serial — păstrăm vizibilitatea în Arduino IDE.
+    Serial.print(bootLog + bootLogLen - n);
+  }
+}
 
 // ============================================================
 //  Setup & Loop
@@ -304,6 +334,11 @@ void setup() {
 
   Serial.begin(115200);
   delay(200);
+
+  // Începem să umplem log-ul de boot — vizibil prin /diagnostics.
+  bootLogLen = 0;
+  bootLog[0] = '\0';
+  bootLogf("=== Dropwise HUB boot ===\n");
 
   // LED-ul intern — folosit ca indicator de mod.
   pinMode(PIN_STATUS_LED, OUTPUT);
@@ -328,14 +363,20 @@ void setup() {
   // şi pinguie chip-ul cu retry (uneori AT24C nu răspunde imediat după
   // power-on). Dacă lipseşte, eepromReady rămâne false şi persistenţa
   // configuraţiei devine no-op (hub-ul tot funcţionează în mod degradat).
+  // OLED — display.begin nu raporteaza eroare explicit, dar daca adresa
+  // 0x3C va fi gasita la scan, marcam oledOk.
   eepromInit();
   // i2cScan după eepromInit — la momentul ăsta toate dispozitivele sunt
   // ready. Înainte de delay-ul de boot, AT24C poate nu apare în scan.
+  // Scan-ul seteaza oledOk si rtcOk pe baza adreselor detectate.
   i2cScan();
   // Iniţializăm layout-ul (header + slot-uri zero la prima pornire).
-  // Self-test-ul de 64 B e omis: la prima pornire `storageInit()` deja
-  // scrie/citeşte toată zona de date, deci validează implicit driver-ul.
   storageInit();
+
+  // Rezumat status module — apare in /diagnostics.
+  bootLogf("OLED  - %s\n", oledOk      ? "OK" : "lipsa");
+  bootLogf("EEPROM - %s\n", eepromReady ? "OK" : "lipsa");
+  bootLogf("RTC   - %s\n", rtcOk       ? "OK" : "lipsa (optional)");
 
   // Pompa + valve — initializate in ambele moduri (siguranta).
   pinMode(PIN_PUMP, OUTPUT);

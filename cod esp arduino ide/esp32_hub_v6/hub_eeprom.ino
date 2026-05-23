@@ -52,21 +52,24 @@ static bool eepromWaitReady(unsigned long timeout_ms) {
 // La hub-ul Dropwise ne aşteptăm să vedem cel puţin 0x3C (OLED) şi 0x50
 // (EEPROM AT24C256). Orice altceva e străin sau adresa EEPROM-ului diferă.
 void i2cScan() {
-  Serial.println("--- I2C scan (0x03..0x77) ---");
+  bootLogf("Scanare I2C...\n");
   int found = 0;
+  bool first = true;
+  // Logăm direct adresele într-un singur rând, ca să iasă lizibil în UI.
   for (uint8_t addr = 0x03; addr <= 0x77; addr++) {
     Wire.beginTransmission(addr);
     uint8_t err = Wire.endTransmission();
     if (err == 0) {
-      Serial.print("  ACK at 0x");
-      if (addr < 0x10) Serial.print('0');
-      Serial.println(addr, HEX);
+      bootLogf("%s0x%02X", first ? "Adrese gasite: " : ", ", addr);
+      if (addr == 0x3C) oledOk = true;
+      if (addr == RTC_I2C_ADDR) rtcOk = true;
+      // (EEPROM-ul îşi setează propriul flag prin eepromInit.)
+      first = false;
       found++;
     }
   }
-  Serial.print("--- I2C scan done, ");
-  Serial.print(found);
-  Serial.println(" device(s) ---");
+  if (first) bootLogf("Niciun dispozitiv I2C detectat.");
+  bootLogf("\n");
 }
 
 // ---------- Recuperare bus I2C blocat ----------
@@ -119,20 +122,16 @@ bool eepromInit() {
   for (int i = 0; i < EEPROM_PING_RETRIES; i++) {
     if (eepromPing()) {
       eepromReady = true;
-      Serial.print("EEPROM AT24C256 detected at 0x");
-      Serial.print(EEPROM_ADDR, HEX);
-      Serial.print(" (try ");
-      Serial.print(i + 1);
-      Serial.println(")");
+      bootLogf("EEPROM AT24C256 detectat la 0x%02X (incercare %d) - OK\n",
+               EEPROM_ADDR, i + 1);
       return true;
     }
-    Serial.print("EEPROM ping fail, retry ");
-    Serial.println(i + 1);
+    bootLogf("EEPROM ping fail, retry %d\n", i + 1);
     delay(EEPROM_PING_GAP_MS);
   }
 
   eepromReady = false;
-  Serial.println("EEPROM NOT FOUND — persistenta dezactivata");
+  bootLogf("EEPROM NOT FOUND - persistenta dezactivata\n");
   return false;
 }
 

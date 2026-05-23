@@ -149,9 +149,48 @@ void handleStatus() {
   json += (pumpOn ? "true" : "false");
   json += ",\"wateringPort\":";
   json += wateringPort < 0 ? -1 : wateringPort + 1;
+  // uptime_ms — folosit de PC ca să detecteze un reboot al hub-ului
+  // (uptime scade brusc => boot nou => recer log-ul de diagnostic).
+  json += ",\"uptime_ms\":";
+  json += (uint32_t)millis();
   json += "}";
 
   sendCorsHeaders();
+  server.send(200, "application/json", json);
+}
+
+// Returneaza log-ul de boot + status pe module ca JSON. Folosit de UI
+// la apasarea butonului "Vezi diagnostica" pe cardul de stare hub.
+void handleDiagnostics() {
+  if (!checkAccessCode()) return;
+  sendCorsHeaders();
+
+  // Buffer-ul de log poate contine caractere care strica JSON-ul ({"},\
+  // \n). Escapem la trimitere.
+  String escaped;
+  escaped.reserve(bootLogLen + 32);
+  for (size_t i = 0; i < bootLogLen; i++) {
+    char c = bootLog[i];
+    if (c == '"')      escaped += "\\\"";
+    else if (c == '\\') escaped += "\\\\";
+    else if (c == '\n') escaped += "\\n";
+    else if (c == '\r') escaped += "\\r";
+    else if (c == '\t') escaped += "\\t";
+    else if ((uint8_t)c < 0x20) {
+      // alte control chars — skip
+    } else {
+      escaped += c;
+    }
+  }
+
+  String json = "{";
+  json += "\"uptime_ms\":";  json += (uint32_t)millis();
+  json += ",\"oled\":";      json += (oledOk      ? "true" : "false");
+  json += ",\"eeprom\":";    json += (eepromReady ? "true" : "false");
+  json += ",\"rtc\":";       json += (rtcOk       ? "true" : "false");
+  json += ",\"boot_log\":\""; json += escaped;       json += "\"";
+  json += "}";
+
   server.send(200, "application/json", json);
 }
 

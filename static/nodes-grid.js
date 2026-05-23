@@ -13,12 +13,21 @@
 
   // ---------- Polling grilă ----------
 
+  // Cache diagnostic — se invalidează la pierdere de conexiune sau la
+  // detectarea unui reboot al hub-ului (uptime scade brusc).
+  let receivedBootLog = false;
+  let bootLogData = null;
+  let lastUptimeMs = 0;
+
   nodes.pollMonitor = async function () {
     const el = nodes.el;
     // Fără cod / fără hub provizionat — nu interogăm (am primi doar 404).
     if (!canPoll()) {
       setHubCard('pending', null);
       el.nodeGrid.innerHTML = '';
+      receivedBootLog = false;
+      bootLogData = null;
+      updateDiagBadge();
       return;
     }
     try {
@@ -26,15 +35,58 @@
       if (!j.online || !j.data) {
         setHubCard('offline', null);
         el.nodeGrid.innerHTML = '';
+        receivedBootLog = false;
+        bootLogData = null;
+        updateDiagBadge();
         return;
       }
       setHubCard('online', j.data);
       renderNodeGrid(j.data.ports || [], el.nodeGrid);
+
+      // Detectare boot nou: uptime scade vs. ce ţineam minte.
+      const upt = j.data.uptime_ms;
+      if (upt != null) {
+        if (upt < lastUptimeMs) {
+          receivedBootLog = false;   // hub-ul s-a restartat
+        }
+        lastUptimeMs = upt;
+      }
+      // Dacă nu am log-ul (prima dată / pierdere conexiune / reboot),
+      // îl cerem acum şi îl cache-uim.
+      if (!receivedBootLog) fetchBootLog();
     } catch (e) {
       setHubCard('offline', null);
       el.nodeGrid.innerHTML = '';
+      receivedBootLog = false;
+      bootLogData = null;
+      updateDiagBadge();
     }
   };
+
+  async function fetchBootLog() {
+    try {
+      const j = await getJSON('/api/hub/diagnostics',
+                              { cache: 'no-store' });
+      if (j.online && j.data) {
+        bootLogData = j.data;
+        receivedBootLog = true;
+        updateDiagBadge();
+      }
+    } catch (e) { /* lasam pentru polling-ul urmator */ }
+  }
+
+  /** True dacă diagnosticul conţine cel puţin un modul în starea "lipsă". */
+  function hasDiagIssues(d) {
+    if (!d) return false;
+    return d.oled === false || d.eeprom === false || d.rtc === false;
+  }
+
+  /** Marchează butonul Diagnostic cu un punct roşu dacă există probleme. */
+  function updateDiagBadge() {
+    const btn = document.getElementById('btn-diagnostics');
+    if (!btn) return;
+    btn.dataset.hasIssues = hasDiagIssues(bootLogData) ? 'true' : 'false';
+  }
 
   /**
    * Actualizează cardul de stare al hub-ului de pe tab-ul Monitor.
@@ -134,6 +186,8 @@
       card.querySelector('.node-card__soil').hidden = true;
       card.querySelector('.node-card__sensors').hidden = true;
       card.querySelector('.node-card__cfg').hidden = true;
+      const gb = card.querySelector('.node-card__graph');
+      if (gb) gb.hidden = true;
       card.querySelector('.node-card__handshake').hidden = true;
       card.style.removeProperty('--node-accent');
     }
@@ -152,6 +206,8 @@
       card.querySelector('.node-card__soil').hidden = true;
       card.querySelector('.node-card__sensors').hidden = true;
       card.querySelector('.node-card__cfg').hidden = true;
+      const gb2 = card.querySelector('.node-card__graph');
+      if (gb2) gb2.hidden = true;
       card.querySelector('.node-card__handshake').hidden = false;
       card.style.removeProperty('--node-accent');
     }
@@ -175,15 +231,58 @@
           </button>
           <div class="node-card__menu-list" role="menu" hidden>
             <button type="button" class="node-card__menu-item" role="menuitem"
-                    data-action="stats">Vezi statistici</button>
+                    data-action="stats">
+              <svg class="node-card__menu-icon" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <line x1="6"  y1="20" x2="6"  y2="12"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="18" y1="20" x2="18" y2="14"/>
+              </svg>
+              <span>Statistici</span>
+            </button>
             <button type="button" class="node-card__menu-item" role="menuitem"
-                    data-action="params">Parametri</button>
+                    data-action="params">
+              <svg class="node-card__menu-icon" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <line x1="4" y1="6"  x2="20" y2="6"/>
+                <line x1="4" y1="12" x2="20" y2="12"/>
+                <line x1="4" y1="18" x2="20" y2="18"/>
+                <circle cx="8"  cy="6"  r="2" fill="currentColor"/>
+                <circle cx="16" cy="12" r="2" fill="currentColor"/>
+                <circle cx="10" cy="18" r="2" fill="currentColor"/>
+              </svg>
+              <span>Parametri</span>
+            </button>
             <button type="button" class="node-card__menu-item" role="menuitem"
-                    data-action="reconfigure">Reconfigurează</button>
+                    data-action="reconfigure">
+              <svg class="node-card__menu-icon" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <path d="M21 12 a 9 9 0 1 1 -3 -6.7"/>
+                <polyline points="21 4 21 10 15 10"/>
+              </svg>
+              <span>Reconfigurează</span>
+            </button>
             <button type="button"
                     class="node-card__menu-item node-card__menu-item--danger"
                     role="menuitem"
-                    data-action="reset">Resetare</button>
+                    data-action="reset">
+              <svg class="node-card__menu-icon" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6 l -1 14 a 2 2 0 0 1 -2 2 H 8 a 2 2 0 0 1 -2 -2 L 5 6"/>
+                <path d="M10 11 v 6 M 14 11 v 6"/>
+                <path d="M9 6 V 4 a 2 2 0 0 1 2 -2 h 2 a 2 2 0 0 1 2 2 v 2"/>
+              </svg>
+              <span>Resetare</span>
+            </button>
           </div>
         </div>
       </div>
@@ -195,6 +294,16 @@
       <p class="node-card__soil"></p>
       <div class="node-card__sensors"></div>
       <button type="button" class="btn btn--primary node-card__cfg"></button>
+      <button type="button" class="btn btn--ghost node-card__graph" hidden>
+        <svg class="node-card__graph-icon" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true">
+          <path d="M3 3 v 18 h 18"/>
+          <polyline points="7 15 11 10 14 13 20 6"/>
+        </svg>
+        <span>Vezi grafice</span>
+      </button>
       <div class="node-card__handshake" hidden>
         <span>Conectare</span>
         <span class="node-card__dots" aria-hidden="true">
@@ -205,6 +314,10 @@
     // Buton mare "Configurează" — vizibil doar pe nodurile neconfigurate.
     card.querySelector('.node-card__cfg').addEventListener('click', () => {
       if (card.dataset.node) nodes.openWizardForNode(card.dataset.node);
+    });
+    // Buton "Vezi grafic" — vizibil doar pe nodurile configurate (Monitor).
+    card.querySelector('.node-card__graph').addEventListener('click', () => {
+      if (card.dataset.node) openGraphView(card.dataset.node);
     });
 
     // Meniul ⋯
@@ -297,12 +410,15 @@
         applyCardColor(card, cfg.color);
         setPlantImage(img, cfg.plant.id, cfg.plant.name);
       }
-      // Datele de senzori — afişate DOAR pe grila Monitor, nu pe Noduri.
+      // Datele de senzori + butonul "Vezi grafic" — DOAR pe grila Monitor.
       const onMonitor = !!card.closest('#node-grid');
+      const graphBtn = card.querySelector('.node-card__graph');
       if (!onMonitor) {
         sens.hidden = true;
+        if (graphBtn) graphBtn.hidden = true;
       } else {
         renderSensors(sens, port.sensors, port.config);
+        if (graphBtn) graphBtn.hidden = false;
       }
     } else {
       // --- Nod neconfigurat ---
@@ -322,6 +438,8 @@
         soil.hidden = true;
         sens.hidden = true;
         delete sens.dataset.filled;
+        const gb3 = card.querySelector('.node-card__graph');
+        if (gb3) gb3.hidden = true;
         card.style.removeProperty('--node-accent');
         img.hidden = true;
         img.removeAttribute('src');
@@ -352,6 +470,84 @@
     }
   }
   nodes.applyCardColor = applyCardColor;
+
+  // ---------- Modal Diagnostic hub ----------
+  //
+  // Buton "Vezi diagnostica" pe cardul hub din Monitor → deschide un modal
+  // cu log-ul de boot şi statusul modulelor I²C (OLED/EEPROM/RTC). Datele
+  // sunt cache-uite local (`bootLogData`); se recer dacă hub-ul a fost
+  // offline sau s-a restartat (vezi `pollMonitor`).
+
+  let diagDialog = null;
+
+  function ensureDiagDialog() {
+    if (diagDialog) return diagDialog;
+    const dlg = document.createElement('dialog');
+    dlg.id = 'diag-dialog';
+    dlg.className = 'diag-dialog';
+    dlg.innerHTML = `
+      <div class="diag-dialog__body">
+        <header class="diag-dialog__head">
+          <h2 class="diag-dialog__title">Diagnostic hub</h2>
+          <button type="button" class="diag-dialog__close"
+                  aria-label="Închide" data-action="close">×</button>
+        </header>
+        <div class="diag-dialog__modules">
+          <span class="diag-pill" data-mod="oled">OLED</span>
+          <span class="diag-pill" data-mod="eeprom">EEPROM</span>
+          <span class="diag-pill" data-mod="rtc">RTC</span>
+          <span class="diag-pill diag-pill--neutral" data-mod="uptime">Uptime</span>
+        </div>
+        <textarea class="diag-dialog__log" readonly></textarea>
+      </div>
+    `;
+    document.body.appendChild(dlg);
+    dlg.querySelector('[data-action="close"]')
+      .addEventListener('click', () => dlg.close());
+    diagDialog = dlg;
+    return dlg;
+  }
+
+  function fmtUptime(ms) {
+    if (ms == null) return '—';
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${m}m ${sec}s`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
+  }
+
+  function openDiagnosticsDialog() {
+    const dlg = ensureDiagDialog();
+    const data = bootLogData;
+    const setPill = (mod, ok) => {
+      const el = dlg.querySelector(`[data-mod="${mod}"]`);
+      if (!el) return;
+      el.dataset.state = ok ? 'ok' : 'missing';
+    };
+    if (data) {
+      setPill('oled',   data.oled);
+      setPill('eeprom', data.eeprom);
+      setPill('rtc',    data.rtc);
+      const upEl = dlg.querySelector('[data-mod="uptime"]');
+      upEl.textContent = 'Uptime: ' + fmtUptime(data.uptime_ms);
+      dlg.querySelector('.diag-dialog__log').value =
+        data.boot_log || '(log gol)';
+    } else {
+      ['oled','eeprom','rtc'].forEach(m => setPill(m, false));
+      dlg.querySelector('[data-mod="uptime"]').textContent = 'Uptime: —';
+      dlg.querySelector('.diag-dialog__log').value =
+        'Diagnosticul nu a putut fi obţinut de la hub. Verifică ' +
+        'conexiunea şi reîncearcă.';
+      // Mai încercăm o dată acum, în background.
+      fetchBootLog().then(() => {
+        if (bootLogData && dlg.open) openDiagnosticsDialog();
+      });
+    }
+    if (typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
+  }
 
   // ---------- Senzori (afişaţi pe cardurile din tab-ul Monitor) ----------
   //
@@ -612,6 +808,283 @@
 
   // ---------- Init modul ----------
 
+  // ---------- Pagina Grafic ----------
+  //
+  // Click pe "Vezi grafic" pe un card de Monitor → ascunde restul tab-ului
+  // şi afişează 5 grafice (umiditate sol + lux pe rândul 1, cele 3 temp/
+  // umiditate aer pe rândul 2). Datele vin de la /api/node/<P>/history,
+  // 24 puncte orare. Chart.js încărcat lazy de prima dată când se deschide.
+
+  let chartJsPromise = null;
+  let activeCharts = [];
+  // Cache pentru download CSV — populat la fiecare openGraphView.
+  let lastHistorySamples = null;
+  let lastHistoryNodeName = null;
+
+  function loadChartJs() {
+    if (chartJsPromise) return chartJsPromise;
+    chartJsPromise = new Promise((resolve, reject) => {
+      if (window.Chart) { resolve(window.Chart); return; }
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+      s.onload = () => resolve(window.Chart);
+      s.onerror = () => reject(new Error('Nu am putut încărca Chart.js'));
+      document.head.appendChild(s);
+    });
+    return chartJsPromise;
+  }
+
+  // Config per metrică: label, unitate, culoare linie, formatter tick.
+  const GRAPH_METRICS = {
+    soil_moisture_pct: { unit: '%',  color: 'rgba(184,240,201,1)' },
+    lux:               { unit: 'lx', color: 'rgba(255,204,102,1)' },
+    soil_temp_c:       { unit: '°C', color: 'rgba(180,140,255,1)' },
+    air_temp_c:        { unit: '°C', color: 'rgba(140,200,255,1)' },
+    air_humidity_pct:  { unit: '%',  color: 'rgba(255,160,200,1)' },
+  };
+
+  async function openGraphView(nodeName) {
+    const main  = document.getElementById('monitor-main');
+    const view  = document.getElementById('node-graph');
+    const title = document.getElementById('graph-node-name');
+    if (!main || !view || !title) return;
+
+    title.textContent = nodeName;
+    main.hidden = true;
+    view.hidden = false;
+    nodes.stopMonitorPolling && nodes.stopMonitorPolling();
+
+    // Curăţăm graficele anterioare (dacă se redeschide pagina).
+    activeCharts.forEach((c) => c.destroy());
+    activeCharts = [];
+
+    // Încărcăm Chart.js (CDN) + istoric + config nod — paralel.
+    let chartLib, history, nodeCfg;
+    try {
+      [chartLib, history, nodeCfg] = await Promise.all([
+        loadChartJs(),
+        nodes.getJSON('/api/node/' + encodeURIComponent(nodeName) + '/history'),
+        nodes.getJSON('/api/node/' + encodeURIComponent(nodeName)),
+      ]);
+    } catch (e) {
+      view.querySelectorAll('.graph-card__canvas').forEach((c) => {
+        c.parentElement.innerHTML = '<p class="setup-hint">Eroare la încărcarea graficelor: ' + e.message + '</p>';
+      });
+      return;
+    }
+
+    const samples = history.samples || [];
+    lastHistorySamples = samples;
+    lastHistoryNodeName = nodeName;
+    const labels = samples.map((s) => {
+      const d = new Date(s.ts * 1000);
+      return d.getHours().toString().padStart(2, '0') + ':00';
+    });
+
+    // Praguri pentru linii de referinţă pe grafic:
+    //   - umiditate sol: setpoint (mereu vizibil, dashed alb subtil);
+    //   - lumină: lux_min / lux_max — controlate de toggle-uri (Min/Max).
+    const setpoint = nodeCfg && nodeCfg.regulator
+      ? nodeCfg.regulator.setpoint : null;
+    let luxMin = null, luxMax = null;
+    if (nodeCfg && nodeCfg.plant && nodes.catalog) {
+      const pl = nodes.catalog.plants.find((x) => x.id === nodeCfg.plant.id);
+      if (pl) {
+        luxMin = pl.lux_min != null ? pl.lux_min : null;
+        luxMax = pl.lux_max != null ? pl.lux_max : null;
+      }
+    }
+
+    // Helper: linie de referinţă (valoare constantă, dashed). Foloseşte
+    // Chart.js dataset cu pointRadius 0 + borderDash. Etichetă în legendă.
+    function referenceLine(label, value, color) {
+      return {
+        label: label,
+        data: new Array(labels.length).fill(value),
+        borderColor: color,
+        backgroundColor: 'transparent',
+        borderDash: [6, 4],
+        borderWidth: 1.5,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+        pointHitRadius: 0,
+        tension: 0,
+        fill: false,
+        spanGaps: true,
+      };
+    }
+
+    view.querySelectorAll('.graph-card__canvas').forEach((canvas) => {
+      const metric = canvas.dataset.metric;
+      const cfg = GRAPH_METRICS[metric];
+      if (!cfg) return;
+      const data = samples.map((s) => s[metric]);
+
+      // Construim lista de dataset-uri: dataset principal + linii de referinţă.
+      // Pentru graficele cu legendă (cele cu referinţe), datasetul principal
+      // primeşte şi un label vizibil — apare în legendă, dar e marcat
+      // _locked = true, deci click-ul pe el e ignorat (rămâne mereu vizibil).
+      const datasets = [{
+        label: metric === 'lux' ? 'Lux'
+             : metric === 'soil_moisture_pct' ? 'Umiditate sol'
+             : '',
+        data: data,
+        borderColor: cfg.color,
+        backgroundColor: cfg.color.replace('1)', '0.15)'),
+        fill: true,
+        tension: 0.35,
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        borderWidth: 2,
+        _locked: true,    // marker custom: click în legendă pe el = ignorat
+      }];
+      if (metric === 'soil_moisture_pct' && setpoint != null) {
+        datasets.push(referenceLine(
+          'Setpoint (' + setpoint + ' %)',
+          setpoint,
+          'rgba(255,255,255,0.6)'));
+      }
+      // Pentru lux, liniile Min/Max sunt adăugate ÎNTOTDEAUNA dar
+      // `hidden: true` iniţial — utilizatorul le activează din legendă
+      // (click pe label "Minim" / "Maxim" → linia apare).
+      if (metric === 'lux') {
+        if (luxMin != null) {
+          const ds = referenceLine(
+            'Minim (' + luxMin + ' lx)',
+            luxMin,
+            'rgba(255,138,138,0.7)');
+          ds.hidden = true;
+          datasets.push(ds);
+        }
+        if (luxMax != null) {
+          const ds = referenceLine(
+            'Maxim (' + luxMax + ' lx)',
+            luxMax,
+            'rgba(255,138,138,0.7)');
+          ds.hidden = true;
+          datasets.push(ds);
+        }
+      }
+
+      // Avem legendă dacă există cel puţin o linie de referinţă (oricare).
+      const hasRefLines = datasets.length > 1;
+
+      const c = new chartLib(canvas, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            // Legenda apare doar când avem linie de referinţă, ca să o
+            // identifice; pentru graficele simple rămâne ascunsă.
+            legend: hasRefLines
+              ? {
+                  display: true,
+                  position: 'top',
+                  align: 'end',
+                  labels: {
+                    color: 'rgba(255,255,255,0.7)',
+                    font: { size: 10 },
+                    boxWidth: 18,
+                    boxHeight: 2,
+                  },
+                  // Click pe etichetă comută vizibilitatea dataset-ului,
+                  // EXCEPTÂND cele marcate _locked (dataset-ul principal —
+                  // datele de lux/umiditate nu trebuie să poată fi ascunse).
+                  onClick: (e, legendItem, legend) => {
+                    const ci = legend.chart;
+                    const ds = ci.data.datasets[legendItem.datasetIndex];
+                    if (ds._locked) return;   // ignorăm click-ul
+                    ds.hidden = !ds.hidden;
+                    ci.update();
+                  },
+                }
+              : { display: false },
+            tooltip: {
+              backgroundColor: 'rgba(13,31,23,0.95)',
+              borderColor: 'rgba(255,255,255,0.1)',
+              borderWidth: 1,
+              padding: 10,
+              // Filtrăm tooltip-ul ca să apară doar valoarea reală,
+              // nu liniile de referinţă (au valoare constantă).
+              filter: (tooltipItem) => {
+                const ds = tooltipItem.dataset;
+                return !(ds && Array.isArray(ds.borderDash) && ds.borderDash.length > 0);
+              },
+              callbacks: {
+                label: (ctx) => ctx.parsed.y + ' ' + cfg.unit,
+              },
+            },
+          },
+          scales: {
+            x: {
+              ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 }, maxRotation: 0 },
+              grid:  { color: 'rgba(255,255,255,0.05)' },
+            },
+            y: {
+              ticks: {
+                color: 'rgba(255,255,255,0.5)', font: { size: 10 },
+                callback: (v) => v + ' ' + cfg.unit,
+              },
+              grid:  { color: 'rgba(255,255,255,0.05)' },
+            },
+          },
+        },
+      });
+      activeCharts.push(c);
+    });
+  }
+
+  /** Generează CSV cu ultimele samples şi declanşează download în browser. */
+  function downloadHistoryCsv() {
+    if (!lastHistorySamples || !lastHistorySamples.length) return;
+
+    const header = [
+      'timestamp', 'datetime',
+      'soil_moisture_pct', 'soil_temp_c',
+      'air_temp_c', 'air_humidity_pct', 'lux',
+    ];
+    const rows = [header.join(',')];
+    for (const s of lastHistorySamples) {
+      const d = new Date(s.ts * 1000);
+      const pad = (n) => String(n).padStart(2, '0');
+      const datetime =
+        d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+        ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' +
+        pad(d.getSeconds());
+      rows.push([
+        s.ts, datetime,
+        s.soil_moisture_pct, s.soil_temp_c,
+        s.air_temp_c, s.air_humidity_pct, s.lux,
+      ].join(','));
+    }
+    const csv = rows.join('\n') + '\n';
+
+    // Declanşăm download-ul prin Blob + link sintetic.
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `dropwise_${lastHistoryNodeName}_${today}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function closeGraphView() {
+    const main = document.getElementById('monitor-main');
+    const view = document.getElementById('node-graph');
+    if (!main || !view) return;
+    view.hidden = true;
+    main.hidden = false;
+    activeCharts.forEach((c) => c.destroy());
+    activeCharts = [];
+    nodes.startMonitorPolling && nodes.startMonitorPolling();
+  }
+
   nodes.initGrid = function () {
     // Click în afara unui meniu ⋯ => îl închidem.
     document.addEventListener('click', (ev) => {
@@ -620,5 +1093,23 @@
     document.addEventListener('keydown', (ev) => {
       if (ev.key === 'Escape') closeAllNodeMenus();
     });
+
+    // Buton "Vezi diagnostica" pe cardul hub din Monitor.
+    const diagBtn = document.getElementById('btn-diagnostics');
+    if (diagBtn) {
+      diagBtn.addEventListener('click', openDiagnosticsDialog);
+    }
+
+    // Buton "← Înapoi la monitor" în pagina Grafic.
+    const graphClose = document.getElementById('graph-close');
+    if (graphClose) {
+      graphClose.addEventListener('click', closeGraphView);
+    }
+
+    // Buton "Descarcă CSV" în header-ul paginii Grafic.
+    const csvBtn = document.getElementById('graph-download-csv');
+    if (csvBtn) {
+      csvBtn.addEventListener('click', downloadHistoryCsv);
+    }
   };
 })();
