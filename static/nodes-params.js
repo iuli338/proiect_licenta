@@ -98,16 +98,25 @@
     }
   };
 
-  /** Închide vederea, readuce grila. */
+  /** Închide vederea (apel din butonul "Înapoi"). Înlocuieşte hash-ul
+      cu #nodes (replaceState) — revine mereu la lista de carduri. */
   function closeNodeParams() {
+    if (window.location.hash !== '#nodes') {
+      history.replaceState(null, '', '#nodes');
+    }
+    doCloseNodeParams();
+  }
+
+  /** Închidere efectivă, fără manipulare istoric. */
+  function doCloseNodeParams() {
     const el = nodes.el;
     hide(el.nodeParams);
     show(el.nodesHeader);
     show(el.nodesGrid);
     setEditMode(false);
-    nodes.setNodesHash('');
     nodes.pollNodesGrid();
   }
+  nodes.doCloseNodeParams = doCloseNodeParams;
 
   // ============================================================
   //  Mod afişare / editare

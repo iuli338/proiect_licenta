@@ -25,7 +25,7 @@
     wiz.edit = false;
     showWizard(nodeName, 'Configurare');
     setWizardStep('plant');
-    nodes.setNodesHash(nodeName + '/config');
+    nodes.setNodesHash(nodeName + '/configure');
   };
 
   /** Deschide wizardul pentru RECONFIGURARE — pre-completat, navigare liberă. */
@@ -44,7 +44,7 @@
     wiz.edit = true;
     showWizard(nodeName, 'Reconfigurare');
     setWizardStep('plant');
-    nodes.setNodesHash(nodeName + '/config');
+    nodes.setNodesHash(nodeName + '/reconfigure');
   };
 
   /** Afişează wizardul: ascunde grila, construieşte paşii, setează titlul. */
@@ -69,13 +69,23 @@
     buildColorStep();
   }
 
-  /** Închide wizardul şi readuce antetul + grila de carduri. */
+  /** Închide wizardul (apel din butonul "Înapoi la noduri"). Înlocuieşte
+      hash-ul cu #nodes (replaceState) — revine mereu la lista de carduri,
+      indiferent de istoricul anterior. */
   nodes.closeWizard = function () {
+    if (window.location.hash !== '#nodes') {
+      history.replaceState(null, '', '#nodes');
+    }
+    nodes.doCloseWizard();
+  };
+
+  /** Închidere efectivă fără manipulare istoric — folosită din
+      applyNodesHash() (hash-ul s-a schimbat deja). */
+  nodes.doCloseWizard = function () {
     const el = nodes.el;
     hide(el.wizard);
     show(el.nodesHeader);
     show(el.nodesGrid);
-    nodes.setNodesHash('');
     nodes.pollNodesGrid();
   };
 

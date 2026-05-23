@@ -837,6 +837,9 @@
   // Cache pentru download CSV — populat la fiecare openGraphView.
   let lastHistorySamples = null;
   let lastHistoryNodeName = null;
+  // Guard care previne recursia: activateTab('monitor') din openGraphView
+  // declanşează dropwise:tab-activated → applyMonitorHash → openGraphView.
+  let graphViewOpening = false;
 
   function loadChartJs() {
     if (chartJsPromise) return chartJsPromise;
@@ -861,17 +864,30 @@
   };
 
   async function openGraphView(nodeName) {
+    if (graphViewOpening) return;     // re-entry blocat (vezi guard mai sus)
+    graphViewOpening = true;
+
     const main  = document.getElementById('monitor-main');
     const view  = document.getElementById('node-graph');
     const title = document.getElementById('graph-node-name');
-    if (!main || !view || !title) return;
+    if (!main || !view || !title) { graphViewOpening = false; return; }
 
-    // Suntem pe tabul Monitor — sincronizăm URL-ul. Forma:
-    // #monitor/Pi/graph — primul segment îl gestionează dashboard.js
-    // pentru a activa tabul Monitor; restul îl gestionăm aici.
+    // Sincronizăm URL-ul. Forma: #monitor/Pi/graph — primul segment îl
+    // gestionează dashboard.js pentru tab, restul îl gestionăm aici.
+    // Folosim pushState (NU replaceState) ca să creăm un entry nou în
+    // istoricul browserului — back-ul fizic va închide pagina Grafice.
+    // Push-ul trebuie să se întâmple ÎNAINTE de activateTab, pentru că
+    // dashboard.js se uită la curTab şi nu rescrie hash-ul dacă tab-ul
+    // se potriveşte deja cu segmentul-rădăcină al URL-ului.
     const targetHash = '#monitor/' + nodeName + '/graph';
     if (window.location.hash !== targetHash) {
-      history.replaceState(null, '', targetHash);
+      history.pushState(null, '', targetHash);
+    }
+    // Acum activăm tab-ul Monitor (apel din meniul ⋯ pe tab-ul Noduri:
+    // tab-ul curent e încă "nodes" şi trebuie comutat). dashboard.js
+    // vede că curTab="monitor" ↔ name="monitor", nu mai atinge hash-ul.
+    if (window.Dropwise && window.Dropwise.activateTab) {
+      window.Dropwise.activateTab('monitor');
     }
 
     title.textContent = nodeName;
@@ -884,9 +900,12 @@
     activeCharts = [];
 
     // Încărcăm Chart.js (CDN) + istoric + config nod — paralel.
-    let chartLib, history, nodeCfg;
+    // Atenţie: NU folosi `history` ca nume local — face shadow pe
+    // window.history şi rupe `history.replaceState` apelat mai sus
+    // (temporal dead zone). Folosim `historyData`.
+    let chartLib, historyData, nodeCfg;
     try {
-      [chartLib, history, nodeCfg] = await Promise.all([
+      [chartLib, historyData, nodeCfg] = await Promise.all([
         loadChartJs(),
         nodes.getJSON('/api/node/' + encodeURIComponent(nodeName) + '/history'),
         nodes.getJSON('/api/node/' + encodeURIComponent(nodeName)),
@@ -895,10 +914,11 @@
       view.querySelectorAll('.graph-card__canvas').forEach((c) => {
         c.parentElement.innerHTML = '<p class="setup-hint">Eroare la încărcarea graficelor: ' + e.message + '</p>';
       });
+      graphViewOpening = false;
       return;
     }
 
-    const samples = history.samples || [];
+    const samples = historyData.samples || [];
     lastHistorySamples = samples;
     lastHistoryNodeName = nodeName;
 
@@ -1091,6 +1111,8 @@
       });
       activeCharts.push(c);
     });
+
+    graphViewOpening = false;
   }
 
   /**
@@ -1113,8 +1135,10 @@
       }
     } else {
       // Nu mai e #monitor/.../graph — închidem pagina dacă era deschisă.
-      const view = document.getElementById('node-graph');
-      if (view && !view.hidden) closeGraphView();
+      // (Apel direct la close-ul "tehnic" — istoricul s-a schimbat deja,
+      // nu mai e nevoie de history.back).
+      const v = document.getElementById('node-graph');
+      if (v && !v.hidden) doCloseGraphView();
     }
   };
 
@@ -1157,6 +1181,19 @@
   }
 
   function closeGraphView() {
+    // Înlocuim hash-ul cu #monitor (replaceState — fără entry nou) ca
+    // butonul "Înapoi la monitor" să se comporte predictibil: revine
+    // mereu la lista de carduri, indiferent de istoricul anterior
+    // (e.g. dacă utilizatorul venise pe Monitor dintr-un alt tab,
+    // history.back() ar fi sărit înapoi la acel tab).
+    if (window.location.hash !== '#monitor') {
+      history.replaceState(null, '', '#monitor');
+    }
+    doCloseGraphView();
+  }
+
+  /** Închidere efectivă, fără să mai umblăm la istoricul browserului. */
+  function doCloseGraphView() {
     const main = document.getElementById('monitor-main');
     const view = document.getElementById('node-graph');
     if (!main || !view) return;
@@ -1164,10 +1201,6 @@
     main.hidden = false;
     activeCharts.forEach((c) => c.destroy());
     activeCharts = [];
-    // Revenim la hash-ul fără sub-pagină — tabul Monitor "curat".
-    if (window.location.hash.indexOf('/graph') !== -1) {
-      history.replaceState(null, '', '#monitor');
-    }
     nodes.startMonitorPolling && nodes.startMonitorPolling();
   }
 
@@ -1176,11 +1209,7 @@
   nodes.closeGraphViewIfOpen = function () {
     const view = document.getElementById('node-graph');
     if (!view || view.hidden) return;
-    view.hidden = true;
-    const main = document.getElementById('monitor-main');
-    if (main) main.hidden = false;
-    activeCharts.forEach((c) => c.destroy());
-    activeCharts = [];
+    doCloseGraphView();
   };
 
   nodes.initGrid = function () {

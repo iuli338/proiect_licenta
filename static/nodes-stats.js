@@ -20,18 +20,28 @@
   // (evită bucle hashchange).
   let applyingHash = false;
 
-  /** Scrie sub-calea tabului Noduri în hash (ex: "P1/stats" sau ""). */
-  nodes.setNodesHash = function (sub) {
+  /**
+   * Scrie sub-calea tabului Noduri în hash (ex: "P1/stats" sau "").
+   * @param sub  sub-calea (ex: "P1/config"); "" sau null = doar "#nodes".
+   * @param push dacă true (default), foloseşte pushState — adaugă entry
+   *   în istoric, deci back-ul browserului închide pagina. Pentru
+   *   `replaceState` (înlocuieşte entry-ul curent, nu apare back), pass `false`.
+   */
+  nodes.setNodesHash = function (sub, push) {
     if (applyingHash) return;
     const h = sub ? '#nodes/' + sub : '#nodes';
-    if (window.location.hash !== h) {
+    if (window.location.hash === h) return;
+    if (push === false) {
       history.replaceState(null, '', h);
+    } else {
+      history.pushState(null, '', h);
     }
   };
 
   /**
    * Aplică ruta din hash pentru tabul Noduri.
-   * Forme: nodes | nodes/<P>/config | nodes/<P>/stats | nodes/<P>/params
+   * Forme: nodes | nodes/<P>/configure | nodes/<P>/reconfigure |
+   *        nodes/<P>/stats | nodes/<P>/params
    *
    * Garda `applyingHash` trebuie să acopere TOATĂ operaţia, inclusiv
    * await-urile din openWizard/openNodeStats — altfel deschiderea cedează
@@ -52,7 +62,9 @@
         await nodes.openNodeStats(node);
       } else if (node && view === 'params' && nodes.openNodeParams) {
         await nodes.openNodeParams(node);
-      } else if (node && view === 'config') {
+      } else if (node && view === 'configure') {
+        nodes.openWizardForNode(node);
+      } else if (node && view === 'reconfigure') {
         await nodes.openWizardForReconfigure(node);
       } else {
         closeSubViews();
@@ -99,15 +111,24 @@
     }
   };
 
-  /** Închide vederea de statistici, readuce grila. */
+  /** Închide vederea de statistici (apel din butonul "Înapoi"). Înlocuieşte
+      hash-ul cu #nodes (replaceState) — revine mereu la lista de carduri. */
   function closeNodeStats() {
+    if (window.location.hash !== '#nodes') {
+      history.replaceState(null, '', '#nodes');
+    }
+    doCloseNodeStats();
+  }
+
+  /** Închidere efectivă, fără manipulare istoric. */
+  function doCloseNodeStats() {
     const el = nodes.el;
     hide(el.nodeStats);
     show(el.nodesHeader);
     show(el.nodesGrid);
-    nodes.setNodesHash('');
     nodes.pollNodesGrid();
   }
+  nodes.doCloseNodeStats = doCloseNodeStats;
 
   /** Randează lista de statistici primită de la server. */
   function renderStats(data) {
