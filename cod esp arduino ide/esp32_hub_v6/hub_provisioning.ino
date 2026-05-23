@@ -69,20 +69,36 @@ class CredsWriteCallbacks : public BLECharacteristicCallbacks {
     String raw = String(ch->getValue().c_str());
     if (raw.length() == 0) return;
 
-    // Format primit: "SSID\nPAROLA"
-    int nl = raw.indexOf('\n');
-    if (nl < 0) {
+    // Format primit: "SSID\nPAROLA" sau "SSID\nPAROLA\nCALLBACK_URL"
+    // Callback-ul (optional) e URL-ul HTTP unde raportam IP-ul dupa
+    // conectarea la WiFi — workaround pt. radio BLE/WiFi partajat.
+    int nl1 = raw.indexOf('\n');
+    if (nl1 < 0) {
       Serial.println("BLE creds: format invalid (lipseste \\n)");
       bleSendStatus("FAIL format invalid");
       return;
     }
 
-    pendingSsid = raw.substring(0, nl);
-    pendingPass = raw.substring(nl + 1);
+    pendingSsid = raw.substring(0, nl1);
+
+    int nl2 = raw.indexOf('\n', nl1 + 1);
+    if (nl2 < 0) {
+      // Doar SSID+parola (format vechi).
+      pendingPass = raw.substring(nl1 + 1);
+      pendingCallback = "";
+    } else {
+      pendingPass = raw.substring(nl1 + 1, nl2);
+      pendingCallback = raw.substring(nl2 + 1);
+      pendingCallback.trim();
+    }
     credsReceived = true;   // procesate in loop, nu in callback
 
     Serial.print("BLE creds received, SSID: ");
     Serial.println(pendingSsid);
+    if (pendingCallback.length()) {
+      Serial.print("Callback URL: ");
+      Serial.println(pendingCallback);
+    }
   }
 };
 
@@ -137,6 +153,24 @@ void processPendingCredentials() {
   if (ok) {
     // Salvam credentialele si confirmam clientului.
     saveCredentials(pendingSsid, pendingPass);
+
+    // Confirmare prin HTTP catre PC — fiabila, foloseste WiFi-ul tocmai
+    // stabilit. Daca radio-ul BLE a fost perturbat de WiFi.begin, asta e
+    // singurul canal sigur prin care PC-ul afla IP-ul.
+    if (pendingCallback.length()) {
+      HTTPClient http;
+      http.begin(pendingCallback);
+      http.addHeader("Content-Type", "application/json");
+      String body = "{\"ip\":\"" + ip + "\"}";
+      int code = http.POST(body);
+      Serial.print("HTTP callback -> ");
+      Serial.print(pendingCallback);
+      Serial.print("  status: ");
+      Serial.println(code);
+      http.end();
+    }
+
+    // Si pe BLE — pentru clientii vechi sau cand HTTP-ul nu ajunge.
     bleSendStatus("OK " + ip);
     drawProvisioningScreen("Conectat! Repornire");
     Serial.println("Provisioning complete, rebooting into normal mode");
@@ -252,6 +286,20 @@ void startNormalMode() {
     server.on(stopUri.c_str(),  HTTP_GET,     handleWaterStop);
     server.on(stopUri.c_str(),  HTTP_POST,    handleWaterStop);
     server.on(stopUri.c_str(),  HTTP_OPTIONS, handleOptions);
+  }
+
+  // /node/Pi/config + /node/Pi/stats + /node/Pi/forget — persistate în EEPROM.
+  for (int i = 1; i <= NUM_PORTS; i++) {
+    String cfgUri    = "/node/P" + String(i) + "/config";
+    String statsUri  = "/node/P" + String(i) + "/stats";
+    String forgetUri = "/node/P" + String(i) + "/forget";
+    server.on(cfgUri.c_str(),    HTTP_GET,     handleNodeGet);
+    server.on(cfgUri.c_str(),    HTTP_POST,    handleNodePost);
+    server.on(cfgUri.c_str(),    HTTP_OPTIONS, handleOptions);
+    server.on(statsUri.c_str(),  HTTP_GET,     handleNodeStats);
+    server.on(statsUri.c_str(),  HTTP_OPTIONS, handleOptions);
+    server.on(forgetUri.c_str(), HTTP_POST,    handleNodeForget);
+    server.on(forgetUri.c_str(), HTTP_OPTIONS, handleOptions);
   }
 
   server.begin();

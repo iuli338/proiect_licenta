@@ -29,9 +29,11 @@
 
 #include <WiFi.h>
 #include <WebServer.h>
+#include <HTTPClient.h>
 #include <esp_now.h>
 #include <esp_wifi.h>
 #include <Preferences.h>
+#include <time.h>
 
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -90,6 +92,47 @@
 #define NVS_NAMESPACE  "dropwise"
 #define NVS_KEY_SSID   "wifi_ssid"
 #define NVS_KEY_PASS   "wifi_pass"
+
+// ---------- EEPROM extern (AT24C256, I2C) ----------
+//
+// 32 KB, partajeaza bus-ul I2C cu OLED-ul (SDA=21, SCL=22). Adresare interna
+// pe 16 biti (big-endian), pagina de scriere 64 B, ciclu intern de scriere
+// ~5 ms. Folosit pentru: config noduri, parametri regulator, statistici si
+// log inelar de udari (vezi hub_eeprom.ino pentru layout).
+#define EEPROM_ADDR              0x50    // A0/A1/A2 = GND
+#define EEPROM_SIZE_BYTES        32768
+#define EEPROM_PAGE_SIZE         64      // pagina de scriere AT24C256
+#define EEPROM_WRITE_CYCLE_MS    10      // 5 ms tipic, 10 ms max datasheet
+#define EEPROM_BOOT_DELAY_MS     50      // aştept t_PU după Wire.begin()
+#define EEPROM_PING_RETRIES      5       // încercări de ACK la pornire
+#define EEPROM_PING_GAP_MS       50
+
+// ---------- Layout EEPROM ----------
+//
+// Fix, definit explicit ca să nu depindem de sizeof() (struct padding pe
+// arhitecturi diferite ar muta câmpurile). Versionat prin EEPROM_MAGIC —
+// dacă header-ul nu se potriveşte, considerăm EEPROM-ul "gol" şi îl
+// iniţializăm. La schimbarea layout-ului incrementăm versiunea.
+
+#define EEPROM_MAGIC              "DROPv01"   // 8 B (cu \0)
+#define EEPROM_LAYOUT_VERSION     2   // bump => re-init la urmatorul boot
+
+#define EEPROM_OFFSET_HEADER      0x0000      // 32 B (resv 64 B pana la slot)
+#define EEPROM_OFFSET_CONFIG_P1   0x0040      // 128 B per port
+#define EEPROM_OFFSET_CONFIG_P2   0x00C0
+#define EEPROM_OFFSET_CONFIG_P3   0x0140
+#define EEPROM_OFFSET_PARAMS_P1   0x01C0      // 64 B per port
+#define EEPROM_OFFSET_PARAMS_P2   0x0200
+#define EEPROM_OFFSET_PARAMS_P3   0x0240
+#define EEPROM_OFFSET_STATS_P1    0x0280      // 64 B per port
+#define EEPROM_OFFSET_STATS_P2    0x02C0
+#define EEPROM_OFFSET_STATS_P3    0x0300
+// 0x0340..0x0FFF rezervat pentru extensii
+// 0x1000..0x7FFF (~28 KB) rezervat pentru log inelar de udări (etapă viitoare)
+
+#define NODE_CONFIG_SIZE          128
+#define REG_PARAMS_SIZE           64
+#define NODE_STATS_SIZE           64
 
 // ---------- Autentificare (cod de acces) ----------
 //
@@ -161,6 +204,69 @@ typedef struct {
   char message[24];
 } EspNowMessage;
 
+// ---------- Structuri EEPROM ----------
+//
+// Toate sunt POD (Plain Old Data) cu __attribute__((packed)) ca să fim
+// siguri că sizeof e exact ce cerem layout-ul. Dimensiuni totale verificate
+// prin static_assert-uri în hub_storage.ino.
+
+typedef struct __attribute__((packed)) {
+  char     magic[8];              // "DROPv01"
+  uint8_t  version;               // EEPROM_LAYOUT_VERSION
+  uint8_t  reserved[23];          // padding pana la 32 B
+} EepromHeader;
+
+// Total per câmp:
+//   16 + 24 + 1 + 1   (plant)
+// + 16 + 24 + 1 + 1   (soil)
+// + 12                (color)
+// + 1                 (configured)
+// = 97  =>  reserved[31] => total 128 B
+// Aliniat pe 128 ca să încapă în 2 pagini de scriere (curat pentru AT24C256).
+typedef struct __attribute__((packed)) {
+  // Plantă
+  char     plantId[16];
+  char     plantName[24];
+  uint8_t  waterNeed;             // 0=scazut, 1=mediu, 2=ridicat
+  uint8_t  plantCustom;
+  // Sol
+  char     soilId[16];
+  char     soilName[24];
+  uint8_t  retention;             // 0=scazut, 1=mediu, 2=ridicat
+  uint8_t  soilCustom;
+  // Card
+  char     color[12];
+  // Flag
+  uint8_t  configured;
+  uint8_t  reserved[31];
+} NodeConfig;                     // 128 B
+
+// 5×float + 4×uint16 = 28 B; reserved[36] => 64 B total.
+typedef struct __attribute__((packed)) {
+  float    K;                     // %/ml — câştig proces
+  float    tauH;                  // ore — constanta de uscare
+  float    lambdaH;               // ore — agresivitate IMC
+  float    Kp;                    // ml / %eroare
+  float    Ki;                    // ml / (%eroare · h)
+  uint16_t setpoint10;            // setpoint × 10 (ex: 500 = 50.0%)
+  uint16_t hysteresis10;          // hysteresis × 10
+  uint16_t minIntervalMin;
+  uint16_t doseEstimatMl;
+  uint8_t  reserved[36];
+} RegParams;                      // 64 B
+
+// 5×uint32 + 1×uint16 + 1×uint8 = 23 B; reserved[41] => 64 B total.
+typedef struct __attribute__((packed)) {
+  uint32_t createdAt;             // epoch UTC (s) — momentul configurarii
+  uint32_t lastWatering;          // epoch UTC (s)
+  uint32_t lastSeen;              // epoch UTC (s) — ultima comunicare nod
+  uint32_t totalWaterings;        // numar de udari de cand e configurat
+  uint32_t totalMl;               // ml totali livrati
+  uint16_t lastDoseMl;            // doza ultima udare
+  uint8_t  lastMoisturePct;       // umiditatea ultima citire (%)
+  uint8_t  reserved[41];
+} NodeStats;                      // 64 B
+
 // ---------- Stare provisioning (BLE) ----------
 
 BLEServer*         bleServer       = nullptr;
@@ -169,7 +275,13 @@ volatile bool      bleClientConn   = false;
 volatile bool      credsReceived   = false;    // setat de callback-ul BLE
 String             pendingSsid     = "";
 String             pendingPass     = "";
+String             pendingCallback = "";   // URL HTTP unde raportăm IP-ul
 unsigned long      lastLedBlink    = 0;
+
+// ---------- Stare EEPROM extern ----------
+// Setat în setup() după ping I2C reuşit; dacă rămâne false, EEPROM-ul nu
+// răspunde — toate operaţiile pe el devin no-op (logăm o singură dată).
+bool               eepromReady     = false;
 
 // ============================================================
 //  Setup & Loop
@@ -198,6 +310,17 @@ void setup() {
   display.println("Booting...");
   display.display();
   delay(500);
+
+  // EEPROM extern AT24C256 — partajeaza bus-ul cu OLED-ul. Aşteaptă t_PU
+  // şi pinguie chip-ul cu retry (uneori AT24C nu răspunde imediat după
+  // power-on). Dacă lipseşte, eepromReady rămâne false şi persistenţa
+  // configuraţiei devine no-op (hub-ul tot funcţionează în mod degradat).
+  i2cScan();          // diagnoză: lista de dispozitive pe bus
+  eepromInit();
+  // Self-test scurt — confirmăm că write+read funcţionează capăt la capăt.
+  eepromSelfTest();
+  // Iniţializăm layout-ul (header + slot-uri zero la prima pornire).
+  storageInit();
 
   // Pompa + valve — initializate in ambele moduri (siguranta).
   pinMode(PIN_PUMP, OUTPUT);
