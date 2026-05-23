@@ -243,6 +243,17 @@
               <span>Statistici</span>
             </button>
             <button type="button" class="node-card__menu-item" role="menuitem"
+                    data-action="graph">
+              <svg class="node-card__menu-icon" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <path d="M3 3 v 18 h 18"/>
+                <polyline points="7 15 11 10 14 13 20 6"/>
+              </svg>
+              <span>Grafice</span>
+            </button>
+            <button type="button" class="node-card__menu-item" role="menuitem"
                     data-action="params">
               <svg class="node-card__menu-icon" viewBox="0 0 24 24"
                    fill="none" stroke="currentColor" stroke-width="2"
@@ -343,6 +354,12 @@
         menuList.hidden = true;
         menuBtn.setAttribute('aria-expanded', 'false');
         if (card.dataset.node) nodes.openNodeStats(card.dataset.node);
+      });
+    menu.querySelector('[data-action="graph"]')
+      .addEventListener('click', () => {
+        menuList.hidden = true;
+        menuBtn.setAttribute('aria-expanded', 'false');
+        if (card.dataset.node) openGraphView(card.dataset.node);
       });
     menu.querySelector('[data-action="params"]')
       .addEventListener('click', () => {
@@ -849,6 +866,14 @@
     const title = document.getElementById('graph-node-name');
     if (!main || !view || !title) return;
 
+    // Suntem pe tabul Monitor — sincronizăm URL-ul. Forma:
+    // #monitor/Pi/graph — primul segment îl gestionează dashboard.js
+    // pentru a activa tabul Monitor; restul îl gestionăm aici.
+    const targetHash = '#monitor/' + nodeName + '/graph';
+    if (window.location.hash !== targetHash) {
+      history.replaceState(null, '', targetHash);
+    }
+
     title.textContent = nodeName;
     main.hidden = true;
     view.hidden = false;
@@ -876,10 +901,38 @@
     const samples = history.samples || [];
     lastHistorySamples = samples;
     lastHistoryNodeName = nodeName;
-    const labels = samples.map((s) => {
-      const d = new Date(s.ts * 1000);
-      return d.getHours().toString().padStart(2, '0') + ':00';
-    });
+
+    // Grilă fixă de 24 slot-uri orare, terminând la ora curentă. Asta
+    // garantează că axa X arată mereu un interval de 24 ore, chiar dacă
+    // nodul are doar câteva sample-uri reale (restul rămân goluri/null).
+    // Slot-ul k = ora HH:00 corespunzătoare timpului (acum - (23 - k) ore).
+    const HOURS = 24;
+    const now = Date.now();
+    const nowHour = new Date(now);
+    nowHour.setMinutes(0, 0, 0);
+    const labels = [];
+    const slotEpochs = [];   // epoch-ul (secunde) al fiecărui slot
+    for (let i = 0; i < HOURS; i++) {
+      const d = new Date(nowHour.getTime() - (HOURS - 1 - i) * 3600 * 1000);
+      labels.push(d.getHours().toString().padStart(2, '0') + ':00');
+      slotEpochs.push(Math.floor(d.getTime() / 1000));
+    }
+
+    // Index sample-urile reale pe ora lor (epoch întreg de oră).
+    const sampleByHour = {};
+    for (const s of samples) {
+      const h = Math.floor(s.ts / 3600) * 3600;
+      sampleByHour[h] = s;
+    }
+
+    /** Întoarce array-ul de 24 valori pentru o metrică, cu null acolo
+        unde nu avem sample. */
+    function alignedData(metricKey) {
+      return slotEpochs.map((h) => {
+        const s = sampleByHour[h];
+        return s ? s[metricKey] : null;
+      });
+    }
 
     // Praguri pentru linii de referinţă pe grafic:
     //   - umiditate sol: setpoint (mereu vizibil, dashed alb subtil);
@@ -918,7 +971,8 @@
       const metric = canvas.dataset.metric;
       const cfg = GRAPH_METRICS[metric];
       if (!cfg) return;
-      const data = samples.map((s) => s[metric]);
+      // 24 valori aliniate la grila orară fixă; null acolo unde lipsesc.
+      const data = alignedData(metric);
 
       // Construim lista de dataset-uri: dataset principal + linii de referinţă.
       // Pentru graficele cu legendă (cele cu referinţe), datasetul principal
@@ -936,6 +990,9 @@
         pointRadius: 2,
         pointHoverRadius: 4,
         borderWidth: 2,
+        // Lăsăm gap-uri vizibile acolo unde lipsesc date — utilizatorul
+        // vede clar ce slot-uri orare nu au fost încă populate de senzor.
+        spanGaps: false,
         _locked: true,    // marker custom: click în legendă pe el = ignorat
       }];
       if (metric === 'soil_moisture_pct' && setpoint != null) {
@@ -1036,6 +1093,31 @@
     });
   }
 
+  /**
+   * Aplică ruta din hash pentru tabul Monitor.
+   * Forme: monitor | monitor/<P>/graph
+   * Apelată la activare tab + la hashchange (vezi initGrid).
+   */
+  nodes.applyMonitorHash = function () {
+    const parts = window.location.hash.replace('#', '').split('/');
+    if (parts[0] !== 'monitor') return;
+    const node = parts[1];
+    const view = parts[2];
+    if (node && view === 'graph') {
+      // Deschidem doar dacă nu suntem deja pe pagina graficului pentru
+      // acelaşi nod (evită re-fetch + re-randare la fiecare hashchange).
+      const cur = document.getElementById('graph-node-name');
+      const onGraph = !document.getElementById('node-graph').hidden;
+      if (!onGraph || !cur || cur.textContent !== node) {
+        openGraphView(node);
+      }
+    } else {
+      // Nu mai e #monitor/.../graph — închidem pagina dacă era deschisă.
+      const view = document.getElementById('node-graph');
+      if (view && !view.hidden) closeGraphView();
+    }
+  };
+
   /** Generează CSV cu ultimele samples şi declanşează download în browser. */
   function downloadHistoryCsv() {
     if (!lastHistorySamples || !lastHistorySamples.length) return;
@@ -1082,8 +1164,24 @@
     main.hidden = false;
     activeCharts.forEach((c) => c.destroy());
     activeCharts = [];
+    // Revenim la hash-ul fără sub-pagină — tabul Monitor "curat".
+    if (window.location.hash.indexOf('/graph') !== -1) {
+      history.replaceState(null, '', '#monitor');
+    }
     nodes.startMonitorPolling && nodes.startMonitorPolling();
   }
+
+  /** Variantă "silent" — apelată când părăseşti tab-ul Monitor. NU
+      modifică hash-ul (dashboard.js îl gestionează deja la tab switch). */
+  nodes.closeGraphViewIfOpen = function () {
+    const view = document.getElementById('node-graph');
+    if (!view || view.hidden) return;
+    view.hidden = true;
+    const main = document.getElementById('monitor-main');
+    if (main) main.hidden = false;
+    activeCharts.forEach((c) => c.destroy());
+    activeCharts = [];
+  };
 
   nodes.initGrid = function () {
     // Click în afara unui meniu ⋯ => îl închidem.

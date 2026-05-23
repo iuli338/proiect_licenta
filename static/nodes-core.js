@@ -128,22 +128,33 @@
       if (tab === 'monitor') {
         nodes.startMonitorPolling();
         nodes.stopNodesPolling();
+        // Deschide pagina Grafice dacă hash-ul cere asta (deep-link).
+        if (nodes.applyMonitorHash) nodes.applyMonitorHash();
       } else if (tab === 'nodes') {
         nodes.stopMonitorPolling();
         nodes.startNodesPolling();
         nodes.applyNodesHash();   // deschide wizard/statistici după hash
+        // Părăsim Monitor-ul → curăţăm pagina Grafice dacă era deschisă.
+        if (nodes.closeGraphViewIfOpen) nodes.closeGraphViewIfOpen();
       } else {
         nodes.stopMonitorPolling();
         nodes.stopNodesPolling();
+        if (nodes.closeGraphViewIfOpen) nodes.closeGraphViewIfOpen();
       }
     });
 
     // Deep-link: reacţionăm la schimbarea hash-ului.
     window.addEventListener('hashchange', () => {
       if (nodesPanel.dataset.active === 'true') nodes.applyNodesHash();
+      if (monitorPanel.dataset.active === 'true' && nodes.applyMonitorHash) {
+        nodes.applyMonitorHash();
+      }
     });
 
-    if (monitorPanel.dataset.active === 'true') nodes.startMonitorPolling();
+    if (monitorPanel.dataset.active === 'true') {
+      nodes.startMonitorPolling();
+      if (nodes.applyMonitorHash) nodes.applyMonitorHash();
+    }
     if (nodesPanel.dataset.active === 'true') {
       nodes.startNodesPolling();
       nodes.applyNodesHash();
