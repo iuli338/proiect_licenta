@@ -310,14 +310,34 @@ void startNormalMode() {
   drawCircles();
 }
 
+// Reconectare WiFi simplă — dacă WiFi-ul cade, încercăm WiFi.begin() la
+// fiecare 5 secunde, la infinit. OLED-ul (drawCircles) afişează
+// "Reconnecting..." în loc de IP cât timp WiFi.localIP() e 0.0.0.0.
+void checkWifiReconnect() {
+  if (WiFi.status() == WL_CONNECTED) return;
+  if (millis() - lastWifiReconnect < WIFI_RECONNECT_GAP_MS) return;
+  lastWifiReconnect = millis();
+  Serial.println("WiFi offline — reconnecting...");
+  WiFi.disconnect();
+  WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+}
+
 // Bucla modului normal — logica originala de functionare.
 void loopNormal() {
 
-  server.handleClient();
-  updateConnectorDetection();
-  updateWateringStateMachine();
+  // Sărim peste handle-uirea de alte cereri HTTP cât suntem în mijlocul
+  // unei tranzacţii EEPROM. Cererile noi vor fi acceptate la următorul
+  // tur de buclă, după ce write-ul curent s-a terminat. Acelaşi guard
+  // pentru detecţia portului şi state-machine-ul de udare (toate citesc
+  // sau scriu pe bus indirect prin OLED / EEPROM).
+  if (i2cBusyDepth == 0) {
+    server.handleClient();
+    updateConnectorDetection();
+    updateWateringStateMachine();
+    checkWifiReconnect();
+  }
 
-  if (millis() - lastBlink > 400) {
+  if (millis() - lastBlink > 400 && i2cBusyDepth == 0) {
     lastBlink = millis();
     blinkState = !blinkState;
     drawCircles();

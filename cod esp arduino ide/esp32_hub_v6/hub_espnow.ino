@@ -85,6 +85,15 @@ void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
 
   if (len != sizeof(EspNowMessage)) return;
 
+  // Dacă suntem în mijlocul unei tranzacţii EEPROM (acelaşi bus I²C cu
+  // OLED-ul, partajat indirect prin Wire), ignorăm callback-ul. Nodul îşi
+  // va retrimite HELLO-ul după câteva secunde — protocolul lor are deja
+  // retry. Aşa evităm tranzacţia I²C ruptă la mijloc (rezultat: err 5/2).
+  if (i2cBusyDepth > 0) {
+    Serial.println("ESP-NOW: ignor mesaj (EEPROM busy)");
+    return;
+  }
+
   EspNowMessage msg;
   memcpy(&msg, incomingData, sizeof(msg));
 

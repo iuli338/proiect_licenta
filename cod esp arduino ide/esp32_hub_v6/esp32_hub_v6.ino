@@ -103,7 +103,7 @@
 #define EEPROM_SIZE_BYTES        32768
 #define EEPROM_PAGE_SIZE         64      // pagina de scriere AT24C256
 #define EEPROM_WRITE_CYCLE_MS    10      // 5 ms tipic, 10 ms max datasheet
-#define EEPROM_BOOT_DELAY_MS     50      // aştept t_PU după Wire.begin()
+#define EEPROM_BOOT_DELAY_MS     200     // aştept t_PU + stabilizare bus
 #define EEPROM_PING_RETRIES      5       // încercări de ACK la pornire
 #define EEPROM_PING_GAP_MS       50
 
@@ -283,6 +283,19 @@ unsigned long      lastLedBlink    = 0;
 // răspunde — toate operaţiile pe el devin no-op (logăm o singură dată).
 bool               eepromReady     = false;
 
+// Cât timp facem o secvenţă de scrieri EEPROM, blocăm redesenarea OLED-ului
+// (acelaşi bus I2C). Incrementat înainte de write, decrementat după —
+// permite nested guards fără să se rupă.
+volatile int       i2cBusyDepth    = 0;
+
+// ---------- Reconectare WiFi ----------
+// Dacă WiFi-ul cade după ce am intrat în mod normal, încercăm o reconectare
+// la fiecare 5 secunde, la infinit. OLED-ul afişează "Reconnecting..." în
+// loc de IP cât timp suntem offline.
+unsigned long      lastWifiReconnect = 0;
+
+#define WIFI_RECONNECT_GAP_MS    5000   // 5 s între încercări
+
 // ============================================================
 //  Setup & Loop
 // ============================================================
@@ -315,11 +328,13 @@ void setup() {
   // şi pinguie chip-ul cu retry (uneori AT24C nu răspunde imediat după
   // power-on). Dacă lipseşte, eepromReady rămâne false şi persistenţa
   // configuraţiei devine no-op (hub-ul tot funcţionează în mod degradat).
-  i2cScan();          // diagnoză: lista de dispozitive pe bus
   eepromInit();
-  // Self-test scurt — confirmăm că write+read funcţionează capăt la capăt.
-  eepromSelfTest();
+  // i2cScan după eepromInit — la momentul ăsta toate dispozitivele sunt
+  // ready. Înainte de delay-ul de boot, AT24C poate nu apare în scan.
+  i2cScan();
   // Iniţializăm layout-ul (header + slot-uri zero la prima pornire).
+  // Self-test-ul de 64 B e omis: la prima pornire `storageInit()` deja
+  // scrie/citeşte toată zona de date, deci validează implicit driver-ul.
   storageInit();
 
   // Pompa + valve — initializate in ambele moduri (siguranta).

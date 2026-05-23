@@ -268,12 +268,20 @@ void handleNodePost() {
 
   cfg.configured = 1;
 
-  // --- persist ---
+  // --- persist (cu un retry la nivel de operaţie, pentru I2C contention) ---
+  // Blocăm redesenarea OLED-ului cât scriem — acelaşi bus I2C, evităm
+  // ca drawCircles să intervină între cele 3 scrieri (config + params + stats).
+  i2cBusyDepth++;
   bool okCfg = storageSaveConfig(port, cfg);
+  if (!okCfg) { delay(100); okCfg = storageSaveConfig(port, cfg); }
   bool okPrm = storageSaveParams(port, rp);
+  if (!okPrm) { delay(100); okPrm = storageSaveParams(port, rp); }
   bool okSt  = storageSaveStats(port,  st);
+  if (!okSt)  { delay(100); okSt  = storageSaveStats(port,  st);  }
+  i2cBusyDepth--;
+
   if (!okCfg || !okPrm || !okSt) {
-    Serial.print("storageSave failed: cfg=");
+    Serial.print("storageSave failed after retry: cfg=");
     Serial.print(okCfg);
     Serial.print(" prm=");
     Serial.print(okPrm);
@@ -303,10 +311,30 @@ void handleNodeForget() {
     return;
   }
 
+  // Blocăm OLED-ul cât zeroizăm slot-ul (bus I2C partajat).
+  // Retry pe nivel de slot — dacă pică, facem o pauză şi reîncercăm o dată.
+  i2cBusyDepth++;
   bool ok = storageClearNode(port);
   if (!ok) {
-    server.send(500, "application/json", "{\"error\":\"eeprom clear failed\"}");
+    Serial.print("storageClearNode P");
+    Serial.print(port + 1);
+    Serial.println(" attempt 1 failed, retry");
+    delay(100);
+    ok = storageClearNode(port);
+  }
+  i2cBusyDepth--;
+
+  if (!ok) {
+    Serial.print("storageClearNode P");
+    Serial.print(port + 1);
+    Serial.println(" failed after retry");
+    server.send(500, "application/json",
+                "{\"error\":\"eeprom clear failed\"}");
     return;
   }
+
+  Serial.print("Node P");
+  Serial.print(port + 1);
+  Serial.println(" cleared from EEPROM");
   server.send(200, "application/json", "{\"ok\":true}");
 }

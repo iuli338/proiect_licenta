@@ -15,7 +15,11 @@ void drawCircles() {
   display.setTextColor(SSD1306_WHITE);
 
   display.setCursor(0, 0);
-  display.println(WiFi.localIP());
+  if (WiFi.status() == WL_CONNECTED) {
+    display.println(WiFi.localIP());
+  } else {
+    display.println("Reconnecting...");
+  }
 
   display.setCursor(0, 12);
   display.print("HUB ch:");

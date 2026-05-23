@@ -69,6 +69,47 @@ void i2cScan() {
   Serial.println(" device(s) ---");
 }
 
+// ---------- Recuperare bus I2C blocat ----------
+//
+// Cauză tipică: un slave (EEPROM-ul nostru, sau OLED-ul) a fost întrerupt
+// în mijlocul unei tranzacţii şi ţine SDA LOW aşteptând cicluri de ceas
+// care nu mai vin. Bus-ul rămâne stuck — niciun slave nu mai răspunde
+// (ACK fails / NACK on address — I2C err 2).
+//
+// Procedura standard de recovery:
+//   1. Eliberăm Wire (pinii devin GPIO normali).
+//   2. Pulsăm SCL până la 9 ori (un byte + ACK) — forţăm slave-ul să
+//      finalizeze tranzacţia pe care o avea în curs şi să elibereze SDA.
+//   3. Generăm o secvenţă de STOP manuală (SDA: LOW → HIGH cu SCL HIGH).
+//   4. Reactivăm Wire.
+void i2cBusRecovery() {
+  Serial.println("I2C bus recovery: pulsez SCL...");
+  Wire.end();
+  delay(5);
+
+  pinMode(21, INPUT_PULLUP);   // SDA
+  pinMode(22, OUTPUT);          // SCL
+  digitalWrite(22, HIGH);
+  delayMicroseconds(10);
+
+  // Până la 9 cicluri de ceas — eliberează SDA dacă un slave îl ţine.
+  for (int i = 0; i < 9 && digitalRead(21) == LOW; i++) {
+    digitalWrite(22, LOW);  delayMicroseconds(10);
+    digitalWrite(22, HIGH); delayMicroseconds(10);
+  }
+
+  // STOP manual: SDA LOW → HIGH cu SCL HIGH.
+  pinMode(21, OUTPUT);
+  digitalWrite(21, LOW);
+  delayMicroseconds(10);
+  digitalWrite(22, HIGH); delayMicroseconds(10);
+  digitalWrite(21, HIGH); delayMicroseconds(10);
+
+  // Reactivăm I2C.
+  Wire.begin(21, 22);
+  delay(5);
+}
+
 // ---------- Iniţializare la boot ----------
 
 // Aştept t_PU şi probez chip-ul cu retry. Setez `eepromReady` global.
@@ -93,6 +134,20 @@ bool eepromInit() {
   eepromReady = false;
   Serial.println("EEPROM NOT FOUND — persistenta dezactivata");
   return false;
+}
+
+// Reîncearcă să "vadă" EEPROM-ul după ce bus-ul a fost blocat. Apelat
+// din retry-ul write/read când primim NACK persistent.
+static void eepromTryRecover() {
+  i2cBusRecovery();
+  // Ping nou — dacă chip-ul răspunde, marcăm înapoi `ready`.
+  if (eepromPing()) {
+    eepromReady = true;
+    Serial.println("EEPROM recovered after bus reset");
+  } else {
+    eepromReady = false;
+    Serial.println("EEPROM still unreachable after bus reset");
+  }
 }
 
 // ---------- Citire ----------
@@ -127,7 +182,14 @@ bool eepromRead(uint16_t addr, uint8_t* buf, size_t len) {
     if (!ok) {
       Serial.print("eepromRead failed at 0x");
       Serial.println(addr + done, HEX);
-      return false;
+      // Bus probabil blocat — recovery + o ultimă încercare.
+      eepromTryRecover();
+      if (!eepromReady) return false;
+      eepromBeginAddr(addr + done);
+      if (Wire.endTransmission(false) != 0) return false;
+      size_t got = Wire.requestFrom((int)EEPROM_ADDR, (int)chunk);
+      if (got != chunk) return false;
+      for (size_t i = 0; i < chunk; i++) buf[done + i] = Wire.read();
     }
     done += chunk;
   }
@@ -151,6 +213,7 @@ bool eepromRead(uint16_t addr, uint8_t* buf, size_t len) {
 // Scrie o singură "porţie" care nu depăşeşte limitele paginii AT24C256.
 // Folosit intern de eepromWrite(). Retry pe NACK — bus-ul I2C e partajat cu
 // OLED-ul, iar OLED-ul poate ţine bus-ul ocupat exact când vrem să scriem.
+// La 3 NACK-uri consecutive declanşăm bus recovery şi mai facem o încercare.
 static bool eepromWritePage(uint16_t addr, const uint8_t* buf, size_t len) {
   for (int attempt = 0; attempt < 3; attempt++) {
     eepromBeginAddr(addr);
@@ -171,14 +234,28 @@ static bool eepromWritePage(uint16_t addr, const uint8_t* buf, size_t len) {
     Serial.println(addr, HEX);
     delay(20);   // pauză înainte de retry
   }
+
+  // Bus probabil blocat — recovery + o ultimă încercare.
+  eepromTryRecover();
+  if (!eepromReady) return false;
+  eepromBeginAddr(addr);
+  Wire.write(buf, len);
+  if (Wire.endTransmission() == 0) {
+    delay(EEPROM_WRITE_CYCLE_MS);
+    return true;
+  }
   return false;
 }
 
 // Scrie `len` octeţi la `addr`. Spargem automat la graniţele paginii de 64 B
-// (constrângere hardware AT24C256).
+// (constrângere hardware AT24C256). În plus, limităm chunk-ul la 16 B —
+// page write mai mare pică intermitent pe modulele AT24C cu Wire-ul ESP32
+// (probabil buffer Wire incomplet sau timing marginal).
 bool eepromWrite(uint16_t addr, const uint8_t* buf, size_t len) {
   if (!eepromReady) return false;
   if (addr + len > EEPROM_SIZE_BYTES) return false;
+
+  const size_t MAX_CHUNK = 1;   // byte-write mode — cel mai sigur
 
   size_t done = 0;
   while (done < len) {
@@ -187,8 +264,7 @@ bool eepromWrite(uint16_t addr, const uint8_t* buf, size_t len) {
     uint16_t pageEnd = (cur / EEPROM_PAGE_SIZE + 1) * EEPROM_PAGE_SIZE;
     size_t chunk = pageEnd - cur;
     if (chunk > len - done) chunk = len - done;
-    // Wire buffer pe ESP32 e 128 B, deci 2 B addr + până la 64 B pagină
-    // încap confortabil. Nu mai limităm artificial la 30 B.
+    if (chunk > MAX_CHUNK) chunk = MAX_CHUNK;
 
     if (!eepromWritePage(cur, buf + done, chunk)) return false;
     done += chunk;
