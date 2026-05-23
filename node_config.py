@@ -318,15 +318,18 @@ class MockHub:
 
 class RealHub:
     """
-    Trimitere reală a configuraţiei către ESP32, prin hub-ul HTTP.
+    Trimitere reală a configuraţiei către hub-ul ESP32, prin HTTP.
 
-    NOTĂ: endpoint-ul de pe hub care propagă configuraţia la nod prin
-    ESP-NOW nu este încă implementat în firmware. Această clasă e pregătită
-    pentru momentul în care va exista.
+    Hub-ul persistă configul în EEPROM-ul AT24C256 (vezi firmware-ul:
+    hub_http_node.ino + hub_storage.ino). Endpoint-ul aşteaptă câmpuri
+    "flat" în JSON (plant_id, plant_name, water_need, soil_id, K, tau_h, ...)
+    pe care le împachetăm aici din structura noastră nested.
     """
 
     def __init__(self, hub_ip: str):
         self.hub_ip = hub_ip
+        # Codul de acces — poate fi setat ulterior de start_config_send.
+        self.access_code: Optional[str] = None
 
     def send_config(self, job: ConfigJob, node: str, config: dict) -> None:
         try:
@@ -336,18 +339,55 @@ class RealHub:
                        message="Biblioteca 'requests' nu este instalată.")
             return
 
+        # Construim payload-ul "flat" pentru firmware.
+        plant = config.get("plant", {}) or {}
+        soil  = config.get("soil", {}) or {}
+        reg   = config.get("regulator", {}) or {}
+        model = reg.get("model", {}) or {}
+
+        flat = {
+            # plant
+            "plant_id":     plant.get("id", ""),
+            "plant_name":   plant.get("name", ""),
+            "water_need":   plant.get("water_need", "mediu"),
+            "plant_custom": 1 if plant.get("custom") else 0,
+            # soil
+            "soil_id":      soil.get("id", ""),
+            "soil_name":    soil.get("name", ""),
+            "retention":    soil.get("retention", "mediu"),
+            "soil_custom":  1 if soil.get("custom") else 0,
+            # color + meta
+            "color":        config.get("color", "mint"),
+            "created_at":   int(config.get("created_at") or 0),
+            # regulator
+            "K":                model.get("K", 1.5),
+            "tau_h":            model.get("tau_h", 31.7),
+            "lambda_h":         reg.get("lambda_h", 30.0),
+            "Kp":               reg.get("Kp", 0.7),
+            "Ki":               reg.get("Ki", 0.0222),
+            "setpoint":         reg.get("setpoint", 50),
+            "hysteresis":       reg.get("hysteresis", 5),
+            "min_interval_min": reg.get("min_interval_min", 1440),
+            "dose_estimat_ml":  reg.get("dose_estimat_ml", 25),
+        }
+
         job.update(status="sending",
                    message=f"Se trimite configuraţia către nodul {node}…")
         try:
-            # TODO(live): endpoint real pe hub — ex. POST /node/<name>/config
-            # Hub-ul propagă apoi configuraţia la nod prin ESP-NOW.
+            # Codul de acces e cerut de orice endpoint privat pe hub. Vine
+            # de obicei din cookie-ul utilizatorului (via start_config_send),
+            # cu fallback la variabila de mediu, apoi la codul implicit.
+            access_code = (self.access_code
+                           or os.environ.get("DROPWISE_HUB_ACCESS_CODE")
+                           or "284095")
             r = requests.post(
                 f"http://{self.hub_ip}/node/{node}/config",
-                json=config, timeout=5,
+                headers={"X-Access-Code": access_code},
+                json=flat, timeout=8,
             )
             r.raise_for_status()
             job.update(status="success",
-                       message="Nodul a confirmat primirea configuraţiei.")
+                       message="Hub-ul a confirmat scrierea în EEPROM.")
         except Exception as e:   # noqa: BLE001
             job.update(status="error",
                        message=f"Trimitere eşuată: {e}")
@@ -361,13 +401,25 @@ def _get_hub(hub_ip: Optional[str]):
 
 
 def start_config_send(node: str, config: dict,
-                      hub_ip: Optional[str] = None) -> ConfigJob:
+                      hub_ip: Optional[str] = None,
+                      access_code: Optional[str] = None) -> ConfigJob:
     """
     Porneşte trimiterea configuraţiei către nod într-un thread de fundal.
     Frontend-ul urmăreşte apoi get_config_job(job.id).
+
+    access_code — codul cu care vorbim cu hub-ul real (X-Access-Code). De
+    obicei vine din cookie-ul utilizatorului; fără el cădem pe variabila
+    DROPWISE_HUB_ACCESS_CODE / pe default.
     """
     job = _register_job(node)
     hub = _get_hub(hub_ip)
+    if access_code:
+        # Pasăm codul către RealHub prin atribut (nu schimbăm semnătura
+        # MockHub care nu are nevoie de el).
+        try:
+            hub.access_code = access_code
+        except AttributeError:
+            pass
 
     def _worker():
         try:

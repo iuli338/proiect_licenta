@@ -11,6 +11,7 @@ Blueprint: Catalog + Configurare noduri
 
 from flask import Blueprint, jsonify, request
 
+import auth
 import node_config as nc
 from core import load_state, save_state, VALID_NODE_NAMES
 from routes.pages import login_required
@@ -103,7 +104,11 @@ def api_node_save(node_name):
     save_state(state)
 
     # Pornim trimiterea către ESP32 (mock sau real).
-    job = nc.start_config_send(node_name, config, state["hub"].get("ip"))
+    # Codul de acces din cookie-ul curent ajunge la hub ca X-Access-Code.
+    job = nc.start_config_send(
+        node_name, config,
+        state["hub"].get("ip"),
+        access_code=auth.current_code())
     return jsonify({"ok": True, "node": node_name, "config": config,
                     "job": job.to_dict()})
 
