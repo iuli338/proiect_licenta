@@ -121,3 +121,46 @@ def api_node_job(job_id):
     if job is None:
         return jsonify({"error": "job inexistent"}), 404
     return jsonify(job.to_dict())
+
+
+@bp.route("/api/node/<node_name>/reset", methods=["POST"])
+@login_required
+def api_node_reset(node_name):
+    """
+    Şterge complet configuraţia unui nod: scoate intrarea din state.json
+    şi (în modul real) apelează /node/P<i>/forget pe hub ca să zeroizeze
+    slot-ul EEPROM. Operaţie IREVERSIBILĂ — front-end-ul confirmă cu dialog.
+    """
+    if node_name not in VALID_NODE_NAMES:
+        return jsonify({"error": "nod invalid"}), 400
+
+    # 1. Stergem din state-ul local.
+    state = load_state()
+    state["nodes"].pop(node_name, None)
+    save_state(state)
+
+    # 2. In modul real, trimitem si la hub sa zeroizeze EEPROM-ul.
+    hub_ip = state["hub"].get("ip")
+    if nc.get_hub_mode() == "real" and hub_ip:
+        try:
+            import requests
+            r = requests.post(
+                f"http://{hub_ip}/node/{node_name}/forget",
+                headers={"X-Access-Code": auth.current_code() or ""},
+                timeout=5,
+            )
+            if r.status_code != 200:
+                return jsonify({
+                    "ok": True,
+                    "node": node_name,
+                    "warning": f"State sters local, dar hub-ul a raspuns "
+                               f"{r.status_code}.",
+                }), 200
+        except Exception as e:   # noqa: BLE001
+            return jsonify({
+                "ok": True,
+                "node": node_name,
+                "warning": f"State sters local, dar hub-ul nu raspunde: {e}",
+            }), 200
+
+    return jsonify({"ok": True, "node": node_name})

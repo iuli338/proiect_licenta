@@ -191,6 +191,15 @@
   background: var(--color-surface);
 }
 
+/* Variantă "periculoasă" (ex: Resetare) — text roşu, hover roşu mai intens. */
+.node-card__menu-item--danger {
+  color: #ff8a8a;
+}
+.node-card__menu-item--danger:hover {
+  background: rgba(239, 100, 100, 0.12);
+  color: #ff6464;
+}
+
 
 .node-card__badge {
   font-size: var(--fs-xs);
@@ -1054,4 +1063,168 @@
     width: 100%;
     padding-left: calc(12px + var(--space-4));
   }
+}
+
+
+/* ---------- 10. Dialog de confirmare resetare nod ----------
+   Folosit din meniul ⋯ → Resetare. Avertizează utilizatorul că operaţia
+   şterge complet datele şi este ireversibilă. */
+
+.reset-dialog {
+  border: 1px solid rgba(239, 100, 100, 0.30);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-deep);
+  color: var(--color-text);
+  padding: 0;
+  max-width: 460px;
+  width: calc(100vw - 32px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  /* Centrare explicită — `dialog` ar trebui centrat default prin
+     `margin:auto`, dar uneori e suprascris. Folosim poziţionare fixă. */
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+}
+
+.reset-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.reset-dialog__form {
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.reset-dialog__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: #ff8a8a;
+}
+
+.reset-dialog__lead,
+.reset-dialog__warn {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.55;
+  max-width: none;
+}
+
+.reset-dialog__warn {
+  padding: var(--space-3) var(--space-4);
+  background: rgba(239, 100, 100, 0.10);
+  border: 1px solid rgba(239, 100, 100, 0.30);
+  border-radius: var(--radius-md);
+  color: #ffb0b0;
+}
+
+.reset-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+/* Butonul de confirmare e roşu, nu mint — semn că nu e o acţiune obişnuită. */
+.reset-dialog__confirm {
+  background: #ef6464;
+  color: white;
+  box-shadow: 0 8px 24px rgba(239, 100, 100, 0.30);
+}
+.reset-dialog__confirm:hover:not(:disabled) {
+  background: #ff7878;
+  transform: translateY(-2px);
+  box-shadow:
+    0 0 0 1px rgba(239, 100, 100, 0.4),
+    0 18px 50px rgba(239, 100, 100, 0.28);
+}
+
+
+/* ---------- 11. Toast de feedback la resetare nod ----------
+   Fix poziţionat în colţul de jos-dreapta — vizibil indiferent unde
+   se află scroll-ul, fiindcă după resetare lista de noduri se reîncarcă. */
+
+.reset-toast {
+  position: fixed;
+  bottom: var(--space-5);
+  right: var(--space-5);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  max-width: 360px;
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out),
+    visibility 0s linear var(--dur-base);
+}
+
+.reset-toast--show {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+  visibility: visible;
+  transition:
+    opacity var(--dur-base) var(--ease-out),
+    transform var(--dur-base) var(--ease-out),
+    visibility 0s linear 0s;
+}
+
+.reset-toast__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.reset-toast__icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.reset-toast[data-kind='ok'] {
+  background: rgba(184, 240, 201, 0.14);
+  border: 1px solid rgba(184, 240, 201, 0.35);
+  color: var(--color-mint);
+  backdrop-filter: blur(8px);
+}
+.reset-toast[data-kind='ok'] .reset-toast__icon {
+  background: rgba(184, 240, 201, 0.20);
+}
+
+.reset-toast[data-kind='warn'] {
+  background: rgba(255, 204, 102, 0.14);
+  border: 1px solid rgba(255, 204, 102, 0.40);
+  color: #ffd98a;
+  backdrop-filter: blur(8px);
+}
+.reset-toast[data-kind='warn'] .reset-toast__icon {
+  background: rgba(255, 204, 102, 0.20);
+}
+
+.reset-toast[data-kind='error'] {
+  background: rgba(239, 100, 100, 0.14);
+  border: 1px solid rgba(239, 100, 100, 0.40);
+  color: #ff8a8a;
+  backdrop-filter: blur(8px);
+}
+.reset-toast[data-kind='error'] .reset-toast__icon {
+  background: rgba(239, 100, 100, 0.20);
 }

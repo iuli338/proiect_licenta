@@ -180,6 +180,10 @@
                     data-action="params">Parametri</button>
             <button type="button" class="node-card__menu-item" role="menuitem"
                     data-action="reconfigure">Reconfigurează</button>
+            <button type="button"
+                    class="node-card__menu-item node-card__menu-item--danger"
+                    role="menuitem"
+                    data-action="reset">Resetare</button>
           </div>
         </div>
       </div>
@@ -232,6 +236,12 @@
         menuList.hidden = true;
         menuBtn.setAttribute('aria-expanded', 'false');
         if (card.dataset.node) nodes.openNodeParams(card.dataset.node);
+      });
+    menu.querySelector('[data-action="reset"]')
+      .addEventListener('click', () => {
+        menuList.hidden = true;
+        menuBtn.setAttribute('aria-expanded', 'false');
+        if (card.dataset.node) nodes.confirmResetNode(card.dataset.node);
       });
   }
 
@@ -346,6 +356,144 @@
     }
   }
   nodes.applyCardColor = applyCardColor;
+
+  // ---------- Resetare nod ----------
+  //
+  // Buton "Resetare" în meniul ⋯ → dialog de avertizare → POST la backend
+  // → toast de succes. Backend-ul şterge configul din state.json şi (în
+  // modul real) trimite /node/Pi/forget la hub ca să zeroizeze slot-ul
+  // EEPROM. Operaţie IREVERSIBILĂ.
+
+  // Dialog construit dinamic la prima utilizare şi refolosit.
+  let resetDialog = null;
+  let resetTarget = null;
+
+  function ensureResetDialog() {
+    if (resetDialog) return resetDialog;
+
+    const dlg = document.createElement('dialog');
+    dlg.id = 'reset-node-dialog';
+    dlg.className = 'reset-dialog';
+    dlg.innerHTML = `
+      <form method="dialog" class="reset-dialog__form">
+        <h2 class="reset-dialog__title">Resetare nod</h2>
+        <p class="reset-dialog__lead">
+          Eşti pe cale să resetezi nodul <strong id="reset-dialog-node">—</strong>.
+          Vor fi şterse <strong>toate datele</strong> asociate: configuraţia
+          plantei, parametrii regulatorului şi statisticile salvate.
+        </p>
+        <p class="reset-dialog__warn">
+          Această operaţie este <strong>ireversibilă</strong>. După resetare
+          va trebui să reconfigurezi nodul de la zero.
+        </p>
+        <div class="reset-dialog__actions">
+          <button type="button" class="btn btn--ghost"
+                  data-action="reset-cancel">Anulează</button>
+          <button type="button" class="btn btn--primary reset-dialog__confirm"
+                  data-action="reset-confirm">
+            <span class="btn__label">Resetare</span>
+          </button>
+        </div>
+      </form>
+    `;
+    document.body.appendChild(dlg);
+
+    dlg.querySelector('[data-action="reset-cancel"]')
+      .addEventListener('click', () => {
+        resetTarget = null;
+        dlg.close();
+      });
+    dlg.querySelector('[data-action="reset-confirm"]')
+      .addEventListener('click', performReset);
+
+    // Esc => anulare implicită.
+    dlg.addEventListener('cancel', () => {
+      resetTarget = null;
+    });
+
+    resetDialog = dlg;
+    return dlg;
+  }
+
+  /** Deschide dialogul de confirmare pentru resetarea unui nod. */
+  nodes.confirmResetNode = function (nodeName) {
+    const dlg = ensureResetDialog();
+    resetTarget = nodeName;
+    dlg.querySelector('#reset-dialog-node').textContent = nodeName;
+    const confirmBtn = dlg.querySelector('[data-action="reset-confirm"]');
+    confirmBtn.disabled = false;
+    confirmBtn.classList.remove('btn--loading');
+    confirmBtn.innerHTML = '<span class="btn__label">Resetare</span>';
+    if (typeof dlg.showModal === 'function') {
+      dlg.showModal();
+    }
+  };
+
+  async function performReset() {
+    if (!resetTarget) return;
+    const dlg = resetDialog;
+    const btn = dlg.querySelector('[data-action="reset-confirm"]');
+    btn.disabled = true;
+    btn.innerHTML =
+      '<span class="btn-spinner" aria-hidden="true"></span>' +
+      '<span>Se resetează…</span>';
+    btn.classList.add('btn--loading');
+
+    const nodeName = resetTarget;
+    try {
+      const j = await nodes.getJSON(
+        '/api/node/' + encodeURIComponent(nodeName) + '/reset',
+        { method: 'POST' });
+      dlg.close();
+      resetTarget = null;
+      showResetToast(
+        j.warning
+          ? `Nodul ${nodeName} a fost resetat local. ${j.warning}`
+          : `Nodul ${nodeName} a fost resetat cu succes.`,
+        j.warning ? 'warn' : 'ok');
+      // Reîmprospătăm grila pe tab-ul Noduri imediat.
+      if (nodes.pollNodesGrid) nodes.pollNodesGrid();
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = '<span class="btn__label">Resetare</span>';
+      btn.classList.remove('btn--loading');
+      showResetToast('Resetare eşuată: ' + e.message, 'error');
+    }
+  }
+
+  /** Toast inline plasat la baza ecranului — apare 4s şi dispare singur. */
+  function showResetToast(msg, kind) {
+    let t = document.getElementById('reset-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'reset-toast';
+      t.className = 'reset-toast';
+      document.body.appendChild(t);
+    }
+    t.dataset.kind = kind || 'ok';
+    // Pictogramă: check pentru succes, ! pentru warning, X pentru eroare.
+    const icon = (kind === 'error')
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        + 'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" '
+        + 'aria-hidden="true"><path d="M6 6 l12 12 M18 6 L 6 18"/></svg>'
+      : (kind === 'warn')
+        ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+          + 'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" '
+          + 'aria-hidden="true"><path d="M12 9 v 5 M 12 17 h 0.01 '
+          + 'M 12 3 L 22 20 H 2 Z"/></svg>'
+        : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+          + 'stroke-width="3" stroke-linecap="round" stroke-linejoin="round" '
+          + 'aria-hidden="true"><path d="M5 12 l5 5 L 20 7"/></svg>';
+    t.innerHTML =
+      '<span class="reset-toast__icon">' + icon + '</span>' +
+      '<span class="reset-toast__text"></span>';
+    t.querySelector('.reset-toast__text').textContent = msg;
+    t.classList.add('reset-toast--show');
+    clearTimeout(showResetToast._timer);
+    showResetToast._timer = setTimeout(() => {
+      t.classList.remove('reset-toast--show');
+    }, 4500);
+  }
 
   // ---------- Init modul ----------
 
