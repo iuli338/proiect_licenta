@@ -55,19 +55,26 @@ static double jsonNum(const String& body, const char* key, double defaultVal) {
   return body.substring(p, end).toDouble();
 }
 
-// ---------- Identificare port din URI ----------
+// ---------- Identificare nume nod din URI ----------
+//
+// URI-uri de forma /node/P1/config -> "P1". Numele nodului e identitatea sa
+// (gravat in firmware-ul nodului prin NODE_NAME), nu portul fizic pe care
+// e conectat. Slot-urile EEPROM sunt indexate pe nume — vezi hub_storage.ino.
 
-// URI-uri de forma /node/P1/config -> port 0; P2 -> 1; P3 -> 2.
-static int parsePortFromNodeUri(const String& uri) {
-  // Caut "/node/P" şi citesc cifra următoare.
-  int k = uri.indexOf("/node/P");
-  if (k < 0) return -1;
-  if ((int)uri.length() <= k + 7) return -1;
-  char c = uri.charAt(k + 7);
-  if (c < '1' || c > '9') return -1;
-  int port = (c - '1');
-  if (port < 0 || port >= NUM_PORTS) return -1;
-  return port;
+// Scrie in `out` numele nodului din URI (ex: "P1"). Returneaza true daca
+// URI-ul are forma valida.
+static bool parseNodeNameFromUri(const String& uri, char* out, size_t outLen) {
+  int k = uri.indexOf("/node/");
+  if (k < 0) return false;
+  k += 6;   // sare peste "/node/"
+  // Numele nodului — pana la urmatorul "/" sau sfarsit.
+  int end = uri.indexOf('/', k);
+  if (end < 0) end = uri.length();
+  int len = end - k;
+  if (len <= 0 || len >= (int)outLen) return false;
+  for (int i = 0; i < len; i++) out[i] = uri.charAt(k + i);
+  out[len] = '\0';
+  return true;
 }
 
 // ---------- Serializare config + stats ca JSON ----------
@@ -101,12 +108,12 @@ static uint8_t parseLevel(const String& s) {
   return 1;
 }
 
-static String buildNodeJson(int port, const NodeConfig& cfg,
+static String buildNodeJson(const char* nodeName, const NodeConfig& cfg,
                             const RegParams& rp, const NodeStats& st) {
   String json = "{";
-  json += "\"port\":";
-  json += (port + 1);
-  json += ",\"configured\":";
+  json += "\"node\":\"";
+  json += nodeName;
+  json += "\",\"configured\":";
   json += (cfg.configured ? "true" : "false");
 
   // plant
@@ -161,36 +168,36 @@ void handleNodeGet() {
   if (!checkAccessCode()) return;
   sendCorsHeaders();
 
-  int port = parsePortFromNodeUri(server.uri());
-  if (port < 0) {
-    server.send(400, "application/json", "{\"error\":\"invalid port\"}");
+  char nodeName[NAME_LEN];
+  if (!parseNodeNameFromUri(server.uri(), nodeName, sizeof(nodeName))) {
+    server.send(400, "application/json", "{\"error\":\"invalid node name\"}");
     return;
   }
 
   NodeConfig cfg; RegParams rp; NodeStats st;
-  storageLoadConfig(port, cfg);
-  storageLoadParams(port, rp);
-  storageLoadStats(port,  st);
+  storageLoadConfig(nodeName, cfg);
+  storageLoadParams(nodeName, rp);
+  storageLoadStats(nodeName,  st);
 
-  server.send(200, "application/json", buildNodeJson(port, cfg, rp, st));
+  server.send(200, "application/json", buildNodeJson(nodeName, cfg, rp, st));
 }
 
 void handleNodeStats() {
   if (!checkAccessCode()) return;
   sendCorsHeaders();
 
-  int port = parsePortFromNodeUri(server.uri());
-  if (port < 0) {
-    server.send(400, "application/json", "{\"error\":\"invalid port\"}");
+  char nodeName[NAME_LEN];
+  if (!parseNodeNameFromUri(server.uri(), nodeName, sizeof(nodeName))) {
+    server.send(400, "application/json", "{\"error\":\"invalid node name\"}");
     return;
   }
 
   NodeStats st;
-  storageLoadStats(port, st);
+  storageLoadStats(nodeName, st);
 
   String json = "{";
-  json += "\"port\":";             json += (port + 1);
-  json += ",\"created_at\":";      json += st.createdAt;
+  json += "\"node\":\"";           json += nodeName;
+  json += "\",\"created_at\":";    json += st.createdAt;
   json += ",\"last_watering\":";   json += st.lastWatering;
   json += ",\"last_seen\":";       json += st.lastSeen;
   json += ",\"total_waterings\":"; json += st.totalWaterings;
@@ -205,9 +212,9 @@ void handleNodePost() {
   if (!checkAccessCode()) return;
   sendCorsHeaders();
 
-  int port = parsePortFromNodeUri(server.uri());
-  if (port < 0) {
-    server.send(400, "application/json", "{\"error\":\"invalid port\"}");
+  char nodeName[NAME_LEN];
+  if (!parseNodeNameFromUri(server.uri(), nodeName, sizeof(nodeName))) {
+    server.send(400, "application/json", "{\"error\":\"invalid node name\"}");
     return;
   }
 
@@ -219,9 +226,9 @@ void handleNodePost() {
 
   // Pornim de la valorile EXISTENTE (ca un PATCH parţial).
   NodeConfig cfg; RegParams rp; NodeStats st;
-  storageLoadConfig(port, cfg);
-  storageLoadParams(port, rp);
-  storageLoadStats(port,  st);
+  storageLoadConfig(nodeName, cfg);
+  storageLoadParams(nodeName, rp);
+  storageLoadStats(nodeName,  st);
 
   // --- plant ---
   String pid    = jsonStr(body, "plant_id");
@@ -272,12 +279,12 @@ void handleNodePost() {
   // Blocăm redesenarea OLED-ului cât scriem — acelaşi bus I2C, evităm
   // ca drawCircles să intervină între cele 3 scrieri (config + params + stats).
   i2cBusyDepth++;
-  bool okCfg = storageSaveConfig(port, cfg);
-  if (!okCfg) { delay(100); okCfg = storageSaveConfig(port, cfg); }
-  bool okPrm = storageSaveParams(port, rp);
-  if (!okPrm) { delay(100); okPrm = storageSaveParams(port, rp); }
-  bool okSt  = storageSaveStats(port,  st);
-  if (!okSt)  { delay(100); okSt  = storageSaveStats(port,  st);  }
+  bool okCfg = storageSaveConfig(nodeName, cfg);
+  if (!okCfg) { delay(100); okCfg = storageSaveConfig(nodeName, cfg); }
+  bool okPrm = storageSaveParams(nodeName, rp);
+  if (!okPrm) { delay(100); okPrm = storageSaveParams(nodeName, rp); }
+  bool okSt  = storageSaveStats(nodeName,  st);
+  if (!okSt)  { delay(100); okSt  = storageSaveStats(nodeName,  st);  }
   i2cBusyDepth--;
 
   if (!okCfg || !okPrm || !okSt) {
@@ -293,48 +300,48 @@ void handleNodePost() {
     return;
   }
 
-  Serial.print("Node P");
-  Serial.print(port + 1);
+  Serial.print("Node ");
+  Serial.print(nodeName);
   Serial.println(" config saved to EEPROM");
 
   // Întoarcem starea finală — ca client-ul să poată confirma valorile.
-  server.send(200, "application/json", buildNodeJson(port, cfg, rp, st));
+  server.send(200, "application/json", buildNodeJson(nodeName, cfg, rp, st));
 }
 
 void handleNodeForget() {
   if (!checkAccessCode()) return;
   sendCorsHeaders();
 
-  int port = parsePortFromNodeUri(server.uri());
-  if (port < 0) {
-    server.send(400, "application/json", "{\"error\":\"invalid port\"}");
+  char nodeName[NAME_LEN];
+  if (!parseNodeNameFromUri(server.uri(), nodeName, sizeof(nodeName))) {
+    server.send(400, "application/json", "{\"error\":\"invalid node name\"}");
     return;
   }
 
   // Blocăm OLED-ul cât zeroizăm slot-ul (bus I2C partajat).
   // Retry pe nivel de slot — dacă pică, facem o pauză şi reîncercăm o dată.
   i2cBusyDepth++;
-  bool ok = storageClearNode(port);
+  bool ok = storageClearNode(nodeName);
   if (!ok) {
-    Serial.print("storageClearNode P");
-    Serial.print(port + 1);
+    Serial.print("storageClearNode ");
+    Serial.print(nodeName);
     Serial.println(" attempt 1 failed, retry");
     delay(100);
-    ok = storageClearNode(port);
+    ok = storageClearNode(nodeName);
   }
   i2cBusyDepth--;
 
   if (!ok) {
-    Serial.print("storageClearNode P");
-    Serial.print(port + 1);
+    Serial.print("storageClearNode ");
+    Serial.print(nodeName);
     Serial.println(" failed after retry");
     server.send(500, "application/json",
                 "{\"error\":\"eeprom clear failed\"}");
     return;
   }
 
-  Serial.print("Node P");
-  Serial.print(port + 1);
+  Serial.print("Node ");
+  Serial.print(nodeName);
   Serial.println(" cleared from EEPROM");
   server.send(200, "application/json", "{\"ok\":true}");
 }

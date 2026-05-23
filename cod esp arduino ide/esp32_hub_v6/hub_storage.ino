@@ -21,26 +21,44 @@ static_assert(sizeof(NodeConfig)   == NODE_CONFIG_SIZE, "NodeConfig != 96 B");
 static_assert(sizeof(RegParams)    == REG_PARAMS_SIZE,  "RegParams != 64 B");
 static_assert(sizeof(NodeStats)    == NODE_STATS_SIZE,  "NodeStats != 64 B");
 
-// ---------- Offset per port ----------
+// ---------- Offset per NUME NOD ----------
+//
+// IMPORTANT: slot-urile sunt indexate pe nume (P1/P2/P3 — gravat în firmware-ul
+// nodului prin NODE_NAME), NU pe portul fizic. Astfel, configuraţia urmează
+// nodul: dacă muţi nodul P1 de pe portul 1 pe portul 2, configul lui rămâne
+// în acelaşi slot EEPROM.
+//
+// Convertim nume → index intern (0/1/2) printr-o singură funcţie nodeIndex(),
+// apoi index → offset. Slot 0 = P1, slot 1 = P2, slot 2 = P3.
 
-static uint16_t configOffset(int port) {
-  switch (port) {
+static int nodeIndex(const char* nodeName) {
+  if (!nodeName) return -1;
+  if (nodeName[0] != 'P' || nodeName[1] == 0 || nodeName[2] != 0) return -1;
+  char c = nodeName[1];
+  if (c < '1' || c > '9') return -1;
+  int idx = c - '1';
+  if (idx < 0 || idx >= NUM_PORTS) return -1;
+  return idx;
+}
+
+static uint16_t configOffset(int slot) {
+  switch (slot) {
     case 0: return EEPROM_OFFSET_CONFIG_P1;
     case 1: return EEPROM_OFFSET_CONFIG_P2;
     case 2: return EEPROM_OFFSET_CONFIG_P3;
   }
   return 0xFFFF;
 }
-static uint16_t paramsOffset(int port) {
-  switch (port) {
+static uint16_t paramsOffset(int slot) {
+  switch (slot) {
     case 0: return EEPROM_OFFSET_PARAMS_P1;
     case 1: return EEPROM_OFFSET_PARAMS_P2;
     case 2: return EEPROM_OFFSET_PARAMS_P3;
   }
   return 0xFFFF;
 }
-static uint16_t statsOffset(int port) {
-  switch (port) {
+static uint16_t statsOffset(int slot) {
+  switch (slot) {
     case 0: return EEPROM_OFFSET_STATS_P1;
     case 1: return EEPROM_OFFSET_STATS_P2;
     case 2: return EEPROM_OFFSET_STATS_P3;
@@ -50,7 +68,7 @@ static uint16_t statsOffset(int port) {
 
 // ---------- Header + init layout ----------
 
-// Citeşte header-ul. Returnează true dacă "DROPv01" + versiunea aşteptată.
+// Citeşte header-ul. Returnează true dacă "DROPv0X" + versiunea aşteptată.
 static bool readHeader(EepromHeader& h) {
   if (!eepromRead(EEPROM_OFFSET_HEADER, (uint8_t*)&h, sizeof(h))) return false;
   if (memcmp(h.magic, EEPROM_MAGIC, 8) != 0) return false;
@@ -79,17 +97,17 @@ bool storageInit() {
 
   EepromHeader h;
   if (readHeader(h)) {
-    Serial.println("EEPROM layout OK (DROPv01)");
+    Serial.println("EEPROM layout OK");
     return true;
   }
 
   Serial.println("EEPROM layout absent — initializez slot-urile");
 
   // Zeroize toate slot-urile.
-  for (int p = 0; p < NUM_PORTS; p++) {
-    if (!zeroSlot(configOffset(p), NODE_CONFIG_SIZE)) return false;
-    if (!zeroSlot(paramsOffset(p), REG_PARAMS_SIZE))  return false;
-    if (!zeroSlot(statsOffset(p),  NODE_STATS_SIZE))  return false;
+  for (int s = 0; s < NUM_PORTS; s++) {
+    if (!zeroSlot(configOffset(s), NODE_CONFIG_SIZE)) return false;
+    if (!zeroSlot(paramsOffset(s), REG_PARAMS_SIZE))  return false;
+    if (!zeroSlot(statsOffset(s),  NODE_STATS_SIZE))  return false;
   }
 
   // Scriem header-ul ABIA la final — dacă init-ul cade la mijloc, la
@@ -103,56 +121,63 @@ bool storageInit() {
   return true;
 }
 
-// ---------- NodeConfig ----------
+// ---------- NodeConfig (indexat pe nume nod) ----------
 
-bool storageLoadConfig(int port, NodeConfig& cfg) {
-  if (port < 0 || port >= NUM_PORTS || !eepromReady) {
+bool storageLoadConfig(const char* nodeName, NodeConfig& cfg) {
+  int slot = nodeIndex(nodeName);
+  if (slot < 0 || !eepromReady) {
     memset(&cfg, 0, sizeof(cfg));
     return false;
   }
-  return eepromRead(configOffset(port), (uint8_t*)&cfg, sizeof(cfg));
+  return eepromRead(configOffset(slot), (uint8_t*)&cfg, sizeof(cfg));
 }
 
-bool storageSaveConfig(int port, const NodeConfig& cfg) {
-  if (port < 0 || port >= NUM_PORTS || !eepromReady) return false;
-  return eepromWrite(configOffset(port), (const uint8_t*)&cfg, sizeof(cfg));
+bool storageSaveConfig(const char* nodeName, const NodeConfig& cfg) {
+  int slot = nodeIndex(nodeName);
+  if (slot < 0 || !eepromReady) return false;
+  return eepromWrite(configOffset(slot), (const uint8_t*)&cfg, sizeof(cfg));
 }
 
 // ---------- RegParams ----------
 
-bool storageLoadParams(int port, RegParams& p) {
-  if (port < 0 || port >= NUM_PORTS || !eepromReady) {
+bool storageLoadParams(const char* nodeName, RegParams& p) {
+  int slot = nodeIndex(nodeName);
+  if (slot < 0 || !eepromReady) {
     memset(&p, 0, sizeof(p));
     return false;
   }
-  return eepromRead(paramsOffset(port), (uint8_t*)&p, sizeof(p));
+  return eepromRead(paramsOffset(slot), (uint8_t*)&p, sizeof(p));
 }
 
-bool storageSaveParams(int port, const RegParams& p) {
-  if (port < 0 || port >= NUM_PORTS || !eepromReady) return false;
-  return eepromWrite(paramsOffset(port), (const uint8_t*)&p, sizeof(p));
+bool storageSaveParams(const char* nodeName, const RegParams& p) {
+  int slot = nodeIndex(nodeName);
+  if (slot < 0 || !eepromReady) return false;
+  return eepromWrite(paramsOffset(slot), (const uint8_t*)&p, sizeof(p));
 }
 
 // ---------- NodeStats ----------
 
-bool storageLoadStats(int port, NodeStats& s) {
-  if (port < 0 || port >= NUM_PORTS || !eepromReady) {
+bool storageLoadStats(const char* nodeName, NodeStats& s) {
+  int slot = nodeIndex(nodeName);
+  if (slot < 0 || !eepromReady) {
     memset(&s, 0, sizeof(s));
     return false;
   }
-  return eepromRead(statsOffset(port), (uint8_t*)&s, sizeof(s));
+  return eepromRead(statsOffset(slot), (uint8_t*)&s, sizeof(s));
 }
 
-bool storageSaveStats(int port, const NodeStats& s) {
-  if (port < 0 || port >= NUM_PORTS || !eepromReady) return false;
-  return eepromWrite(statsOffset(port), (const uint8_t*)&s, sizeof(s));
+bool storageSaveStats(const char* nodeName, const NodeStats& s) {
+  int slot = nodeIndex(nodeName);
+  if (slot < 0 || !eepromReady) return false;
+  return eepromWrite(statsOffset(slot), (const uint8_t*)&s, sizeof(s));
 }
 
-// Ştergerea unui nod (la deconectare fizică sau reconfigurare completă).
-bool storageClearNode(int port) {
-  if (port < 0 || port >= NUM_PORTS || !eepromReady) return false;
-  if (!zeroSlot(configOffset(port), NODE_CONFIG_SIZE)) return false;
-  if (!zeroSlot(paramsOffset(port), REG_PARAMS_SIZE))  return false;
-  if (!zeroSlot(statsOffset(port),  NODE_STATS_SIZE))  return false;
+// Ştergerea unui nod (resetare completă a slot-ului).
+bool storageClearNode(const char* nodeName) {
+  int slot = nodeIndex(nodeName);
+  if (slot < 0 || !eepromReady) return false;
+  if (!zeroSlot(configOffset(slot), NODE_CONFIG_SIZE)) return false;
+  if (!zeroSlot(paramsOffset(slot), REG_PARAMS_SIZE))  return false;
+  if (!zeroSlot(statsOffset(slot),  NODE_STATS_SIZE))  return false;
   return true;
 }
