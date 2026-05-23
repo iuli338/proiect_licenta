@@ -40,6 +40,11 @@
       "id": "anthurium",
       "name": "Anthurium",
       "water_need": "mediu"
+    },
+    {
+      "id": "lily",
+      "name": "Crin",
+      "water_need": "mediu"
     }
   ],
   "soils": [
