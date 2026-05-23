@@ -26,6 +26,11 @@ void drawCircles() {
   }
   display.println();
 
+  // Stare EEPROM extern — indica daca persistenta locala e activa.
+  display.setCursor(0, 22);
+  display.print("EEPROM: ");
+  display.print(eepromReady ? "ok" : "fail");
+
   int y = 46;
   int cx[3] = { 24, 64, 104 };
 
