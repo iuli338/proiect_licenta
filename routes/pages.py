@@ -33,12 +33,17 @@ def api_auth():
     """
     Verifică codul de acces (la apăsarea "Conectare"). Endpoint PUBLIC.
     La cod corect, salvează codul într-un cookie pe browserul clientului.
+
+    Acceptă opţional `hub_ip` în body — folosit în timpul fluxului de
+    Initial Setup, când hub-ul a fost aprovizionat dar IP-ul nu a fost
+    încă salvat în state.json (asta se întâmplă la pasul următor, în
+    /api/setup/connect, care el însuşi cere autentificare).
     """
     data = request.get_json(silent=True) or {}
     code = (data.get("code") or "").strip()
 
     state = load_state()
-    hub_ip = state["hub"].get("ip")
+    hub_ip = state["hub"].get("ip") or (data.get("hub_ip") or "").strip() or None
 
     ok, msg = auth.verify_code(code, hub_ip)
     if not ok:

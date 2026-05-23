@@ -35,10 +35,13 @@ care frontend-ul îl interoghează periodic (polling) cât timp UI-ul e blocat.
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import os
+import socket
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -190,6 +193,169 @@ class SimulatedHub:
                    message=f"Hub conectat la reţea. IP: {self.FAKE_IP}")
 
 
+# ---------------------------------------------------------------- HTTP callback server
+#
+# Ideea: după ce hub-ul a primit credenţialele şi s-a conectat la WiFi, în loc
+# să încercăm să citim confirmarea prin BLE (care moare în timpul `WiFi.begin`),
+# îi spunem hub-ului unde să trimită confirmarea — un mic HTTP server pe PC.
+# Asta e fiabil: callback-ul circulă pe WiFi-ul tocmai stabilit.
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
+
+class _ProvisioningCallback:
+    """Server HTTP scurt — primeşte POST /provisioned cu IP-ul hub-ului.
+
+    Foloseşte ca:
+        cb = _ProvisioningCallback()
+        cb.start()                                  # alocă port liber
+        url = cb.callback_url(_local_ipv4())        # http://ip:port/provisioned
+        # ... trimite URL-ul la hub prin BLE ...
+        ip = cb.wait(timeout_s=30)                  # IP-ul raportat sau None
+        cb.stop()
+    """
+
+    def __init__(self):
+        self._server: Optional[HTTPServer] = None
+        self._thread: Optional[threading.Thread] = None
+        self._event = threading.Event()
+        self._reported_ip: Optional[str] = None
+        self._port: Optional[int] = None
+
+    def start(self) -> int:
+        outer = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                if not self.path.startswith("/provisioned"):
+                    self.send_response(404); self.end_headers(); return
+                length = int(self.headers.get("Content-Length") or 0)
+                body = self.rfile.read(length).decode("utf-8", errors="replace")
+                # Acceptăm două formate: corp = IP brut, sau JSON {"ip": "..."}
+                ip = body.strip().strip('"')
+                if ip.startswith("{"):
+                    import json
+                    try:
+                        ip = (json.loads(body) or {}).get("ip", "")
+                    except json.JSONDecodeError:
+                        ip = ""
+                # Dacă nu e furnizat, folosim adresa clientului HTTP.
+                if not ip:
+                    ip = self.client_address[0]
+                outer._reported_ip = ip
+                outer._event.set()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(b'{"ok":true}')
+
+            def log_message(self, *args, **kwargs):
+                pass   # silenţiem log-ul stdlib
+
+        # Port 0 → OS alocă unul liber.
+        self._server = HTTPServer(("0.0.0.0", 0), Handler)
+        self._port = self._server.server_address[1]
+        self._thread = threading.Thread(target=self._server.serve_forever,
+                                        daemon=True,
+                                        name="dropwise-prov-callback")
+        self._thread.start()
+        return self._port
+
+    def callback_url(self, host: str) -> str:
+        return f"http://{host}:{self._port}/provisioned"
+
+    def wait(self, timeout_s: float) -> Optional[str]:
+        if self._event.wait(timeout=timeout_s):
+            return self._reported_ip
+        return None
+
+    def stop(self) -> None:
+        try:
+            if self._server:
+                self._server.shutdown()
+                self._server.server_close()
+        except Exception:   # noqa: BLE001
+            pass
+
+
+# ---------------------------------------------------------------- discovery HTTP fallback
+#
+# Pe ESP32, radio-ul WiFi şi BLE împart aceeaşi antenă, iar la comutarea pe
+# WiFi (`WiFi.begin`) stiva BLE poate fi resetată — clientul Python primeşte
+# "Device not found" înainte de a apuca să citească notificarea "OK <ip>".
+#
+# Workaround: după ce s-au scris credenţialele şi BLE a căzut, scanăm subnet-ul
+# local pentru un hub Dropwise care răspunde la GET /status cu codul de acces.
+# Acela e hub-ul nostru, abia venit pe WiFi.
+
+def _local_ipv4() -> Optional[str]:
+    """Returnează IP-ul propriu pe reţeaua locală (best effort)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))   # nu trimite nimic, doar alege interfaţa
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:   # noqa: BLE001
+        return None
+
+
+def discover_hub_on_lan(access_code: Optional[str] = None,
+                        timeout_total_s: float = 12.0) -> Optional[str]:
+    """Scanează /24-ul local pentru un hub Dropwise care răspunde la /status.
+
+    `access_code` se trimite în header `X-Access-Code` — fără el, hub-ul
+    întoarce 404. Dacă nu îl avem (în mod normal nu îl avem la provisioning),
+    încercăm cu codul implicit din firmware ("284095") şi cu absenţa lui.
+
+    Returnează IP-ul hub-ului sau None.
+    """
+    try:
+        import requests
+    except ImportError:
+        return None
+
+    own_ip = _local_ipv4()
+    if not own_ip:
+        return None
+
+    # /24 (255.255.255.0) — acoperă tipic LAN-ul de acasă.
+    net = ipaddress.IPv4Network(own_ip + "/24", strict=False)
+    candidates = [str(h) for h in net.hosts() if str(h) != own_ip]
+
+    code = access_code or "284095"
+    headers = {"X-Access-Code": code}
+
+    def probe(ip: str) -> Optional[str]:
+        try:
+            r = requests.get(f"http://{ip}/status",
+                             headers=headers, timeout=0.8)
+            # Hub-ul răspunde 200 OK cu un JSON care conţine cheile
+            # specifice firmware-ului ("ports" + "channel"). Filtrăm strict
+            # pe acestea ca să nu confundăm cu alte servicii HTTP din LAN.
+            if r.status_code == 200 \
+                    and "ports" in r.text and "channel" in r.text:
+                return ip
+        except requests.RequestException:
+            pass
+        return None
+
+    deadline = time.monotonic() + timeout_total_s
+    with ThreadPoolExecutor(max_workers=64) as pool:
+        futures = {pool.submit(probe, ip): ip for ip in candidates}
+        for fut in as_completed(futures, timeout=timeout_total_s):
+            if time.monotonic() > deadline:
+                break
+            try:
+                ip = fut.result()
+            except Exception:   # noqa: BLE001
+                ip = None
+            if ip:
+                # Anulăm restul probelor; le lăsăm să curgă în fundal.
+                return ip
+    return None
+
+
 # ---------------------------------------------------------------- backend: real (bleak)
 
 class RealHub:
@@ -240,7 +406,24 @@ class RealHub:
         """Rulează provisioning-ul real (blocant — apelat din thread de fundal)."""
         try:
             _run_async(self._provision_async(job, address, ssid, password))
-        except Exception as e:   # noqa: BLE001 — orice eroare BLE => job error
+        except Exception as e:   # noqa: BLE001 — orice eroare BLE
+            # 1. Dacă hub-ul a confirmat deja prin BLE, ignorăm excepţia
+            #    (vine din închiderea BLE post-restart ESP).
+            if job.status == "success":
+                return
+            # 2. Dacă am ajuns măcar să scriem credenţialele înainte să cadă
+            #    BLE-ul, e foarte probabil că hub-ul A REUŞIT să se conecteze
+            #    la WiFi, dar notificarea s-a pierdut (radio-ul ESP partajat
+            #    între WiFi şi BLE — vezi nota din `discover_hub_on_lan`).
+            #    Încercăm fallback: căutăm hub-ul pe LAN după IP.
+            if job.status == "waiting":
+                job.update(status="waiting",
+                           message="BLE deconectat. Caut hub-ul pe reţea…")
+                ip = discover_hub_on_lan()
+                if ip:
+                    job.update(status="success", hub_ip=ip,
+                               message=f"Hub conectat la reţea. IP: {ip}")
+                    return
             job.update(status="error",
                        message=f"Eroare BLE: {e}")
 
@@ -261,63 +444,106 @@ class RealHub:
             Firmware-ul ESP32 trimite text UTF-8 în formatul:
                 "OK <ip>"        — conectat, urmează IP-ul
                 "FAIL <motiv>"   — conectarea a eşuat
+            Mesajele intermediare ("Se incearca conectarea la WiFi…") trebuie
+            IGNORATE — nu sunt verdict final, doar progres informativ.
             """
             text = bytes(data).decode("utf-8", errors="replace").strip()
-            if text.upper().startswith("OK"):
+            upper = text.upper()
+            if upper.startswith("OK"):
                 parts = text.split(maxsplit=1)
                 result_payload["ok"] = True
                 result_payload["ip"] = parts[1].strip() if len(parts) > 1 else None
-            else:
+                result_ready.set()
+            elif upper.startswith("FAIL"):
                 parts = text.split(maxsplit=1)
                 result_payload["ok"] = False
                 result_payload["reason"] = (
                     parts[1].strip() if len(parts) > 1 else "motiv necunoscut"
                 )
-            result_ready.set()
+                result_ready.set()
+            else:
+                # Mesaj intermediar — îl propagăm doar ca update de progres
+                # (nu schimbă starea jobului ca să nu-l "termine" prematur).
+                if text:
+                    job.update(message=text)
 
-        async with BleakClient(address) as client:
-            # 1. Abonare la notificările de status ÎNAINTE de a scrie
-            #    credenţialele — ca să nu pierdem o notificare rapidă.
-            await client.start_notify(CHAR_STATUS_UUID, on_status_notify)
+        # Pornim un mic HTTP server local — hub-ul va POST la el imediat după
+        # ce se conectează la WiFi, prin reţea (nu mai depindem de BLE care
+        # moare în timpul `WiFi.begin`). Trimitem URL-ul prin BLE ca al 3-lea
+        # câmp din payload: "SSID\nPAROLA\nCALLBACK_URL".
+        callback = _ProvisioningCallback()
+        callback.start()
+        own_ip = _local_ipv4() or "127.0.0.1"
+        callback_url = callback.callback_url(own_ip)
 
-            # 2. Scriem credenţialele în caracteristica WRITE.
-            #    Format: "SSID\nPAROLA" codat UTF-8.
-            job.update(status="connecting",
-                       message="Transmitere credenţiale WiFi către hub…")
-            payload = f"{ssid}\n{password}".encode("utf-8")
-            await client.write_gatt_char(CHAR_CREDENTIALS_UUID, payload,
-                                         response=True)
+        try:
+            async with BleakClient(address) as client:
+                # 1. Abonare la notificările de status ÎNAINTE de a scrie
+                #    credenţialele — ca să nu pierdem o notificare rapidă.
+                await client.start_notify(CHAR_STATUS_UUID, on_status_notify)
 
-            # 3. Aşteptăm notificarea de la ESP32 (conectare WiFi + DHCP).
-            job.update(status="waiting",
-                       message="Credenţiale trimise. Hub-ul încearcă să se conecteze la WiFi…")
-            try:
-                await asyncio.wait_for(result_ready.wait(),
-                                       timeout=WIFI_CONFIRM_TIMEOUT_S)
-            except asyncio.TimeoutError:
-                job.update(status="error",
-                           message="Hub-ul nu a confirmat conectarea în timpul alocat.")
-                return
-            finally:
-                # Oprim notificările indiferent de rezultat.
+                # 2. Scriem credenţialele în caracteristica WRITE.
+                #    Format: "SSID\nPAROLA\nCALLBACK_URL" codat UTF-8.
+                job.update(status="connecting",
+                           message="Transmitere credenţiale WiFi către hub…")
+                payload = f"{ssid}\n{password}\n{callback_url}".encode("utf-8")
+                await client.write_gatt_char(CHAR_CREDENTIALS_UUID, payload,
+                                             response=True)
+
+                # 3. Aşteptăm pe AMBELE canale, care e mai rapid câştigă:
+                #    a) notify BLE (firmware vechi, sau ESP suficient de rapid)
+                #    b) callback HTTP (firmware nou, sau BLE murit deja)
+                job.update(status="waiting",
+                           message="Credenţiale trimise. Aştept confirmarea de la hub…")
+
+                http_done = asyncio.Event()
+                http_ip: dict = {}
+
+                def _wait_http():
+                    ip = callback.wait(timeout_s=WIFI_CONFIRM_TIMEOUT_S)
+                    if ip:
+                        http_ip["ip"] = ip
+                    asyncio.get_event_loop().call_soon_threadsafe(http_done.set)
+
+                loop = asyncio.get_event_loop()
+                http_thread = threading.Thread(target=_wait_http, daemon=True)
+                http_thread.start()
+
+                done, _ = await asyncio.wait(
+                    [asyncio.create_task(result_ready.wait()),
+                     asyncio.create_task(http_done.wait())],
+                    timeout=WIFI_CONFIRM_TIMEOUT_S,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+
+                # 4. Decidem rezultatul.
+                if http_ip.get("ip"):
+                    job.update(status="success", hub_ip=http_ip["ip"],
+                               message=f"Hub conectat la reţea. IP: {http_ip['ip']}")
+                elif result_payload.get("ok"):
+                    ip = result_payload.get("ip")
+                    if not ip:
+                        job.update(status="error",
+                                   message="Hub conectat, dar nu a raportat un IP valid.")
+                    else:
+                        job.update(status="success", hub_ip=ip,
+                                   message=f"Hub conectat la reţea. IP: {ip}")
+                elif result_payload.get("ok") is False:
+                    reason = result_payload.get("reason", "motiv necunoscut")
+                    job.update(status="error",
+                               message=f"Hub-ul nu s-a putut conecta: {reason}")
+                else:
+                    # Nici BLE nici HTTP — timeout total.
+                    job.update(status="error",
+                               message="Hub-ul nu a confirmat conectarea în timpul alocat.")
+
+                # Oprim notificările — best effort.
                 try:
                     await client.stop_notify(CHAR_STATUS_UUID)
                 except Exception:   # noqa: BLE001
                     pass
-
-        # 4. Interpretăm rezultatul.
-        if result_payload.get("ok"):
-            ip = result_payload.get("ip")
-            if not ip:
-                job.update(status="error",
-                           message="Hub conectat, dar nu a raportat un IP valid.")
-                return
-            job.update(status="success", hub_ip=ip,
-                       message=f"Hub conectat la reţea. IP: {ip}")
-        else:
-            reason = result_payload.get("reason", "motiv necunoscut")
-            job.update(status="error",
-                       message=f"Hub-ul nu s-a putut conecta: {reason}")
+        finally:
+            callback.stop()
 
 
 # ---------------------------------------------------------------- helper async

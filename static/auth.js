@@ -17,6 +17,9 @@
   let el = {};
   // Callback rulat după ce codul e acceptat (în loc de reload).
   let onSuccess = null;
+  // Context opţional pentru dialog — în special hub_ip cunoscut local
+  // (ex. în Initial Setup, înainte ca IP-ul să fie salvat în state.json).
+  let dialogContext = {};
   // True după ce avem un cod de acces valid (status confirmat sau cod
   // introdus cu succes). Folosit ca poartă pentru polling-ul hub-ului.
   let authenticated = false;
@@ -33,10 +36,13 @@
 
   /**
    * Deschide dialogul de cod.
-   * @param cb  callback opţional rulat după cod corect (în loc de reload).
+   * @param cb        callback opţional rulat după cod corect (în loc de reload).
+   * @param context   obiect opţional cu meta (ex: {hubIp: '192.168.1.x'}) —
+   *                  necesar în Initial Setup, când IP-ul nu e încă în state.
    */
-  function openDialog(cb) {
+  function openDialog(cb, context) {
     onSuccess = (typeof cb === 'function') ? cb : null;
+    dialogContext = (context && typeof context === 'object') ? context : {};
     if (!el.dialog.open) {
       clearError();
       el.code.value = '';
@@ -61,10 +67,14 @@
     el.submit.querySelector('.btn__label').textContent = 'Se verifică…';
 
     try {
+      const body = { code: code };
+      if (dialogContext && dialogContext.hubIp) {
+        body.hub_ip = dialogContext.hubIp;
+      }
       const r = await fetch('/api/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code }),
+        body: JSON.stringify(body),
       });
       const j = await r.json();
       if (r.ok && j.ok) {
@@ -74,6 +84,7 @@
           window.Dropwise.refreshTabLock();
         }
         el.dialog.close();
+        dialogContext = {};
         if (onSuccess) {
           // Continuăm fluxul care a cerut codul (ex: butonul Conectare).
           const cb = onSuccess;
