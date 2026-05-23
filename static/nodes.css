@@ -250,6 +250,115 @@
   font-style: italic;
 }
 
+/* Lista de senzori (afişată pe cardurile din Monitor) — eticheta la
+   stânga, valoarea numerică şi unitatea aliniate la dreapta. Grid pe
+   2 coloane ca toate cele 5 valori să fie aliniate vertical. */
+.sensor-list {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px var(--space-3);
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-soft);
+}
+
+.sensor-list__label {
+  font-size: var(--fs-xs);
+  color: var(--color-text-muted);
+  align-self: center;
+}
+
+.sensor-list__value {
+  margin: 0;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.sensor-list__num {
+  min-width: 3.2em;
+  text-align: right;
+}
+
+/* Unitatea — lăţime fixă ca toate să se alinieze vertical. */
+.sensor-list__unit {
+  display: inline-block;
+  width: 1.8em;
+  text-align: left;
+  font-weight: 500;
+  color: var(--color-text-faint);
+}
+
+/* Iconiţă de alertă (triunghi cu !) la stânga valorii — apare doar
+   când lumina e în afara intervalului recomandat pentru plantă. */
+.sensor-list__alert {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  margin-right: var(--space-2);
+  color: #ffcc66;
+  cursor: help;
+  flex-shrink: 0;
+}
+
+.sensor-list__alert svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Tooltip custom — apare la hover pe iconiţa de alertă. Poziţionat
+   absolut deasupra şi spre stânga, ca să nu iasă din card pe dreapta. */
+.sensor-list__tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: -8px;
+  width: 220px;
+  padding: var(--space-3);
+  background: var(--color-bg-deep);
+  border: 1px solid rgba(255, 204, 102, 0.35);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-family: var(--font-body);
+  font-size: var(--fs-xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    visibility 0s linear var(--dur-fast);
+  z-index: 20;
+}
+
+.sensor-list__alert:hover .sensor-list__tip,
+.sensor-list__alert:focus .sensor-list__tip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out),
+    visibility 0s linear 0s;
+}
+
+/* Mic accent vizual pe valoare când e în alertă. */
+.sensor-list__value--alert .sensor-list__num {
+  color: #ffcc66;
+}
+
 .node-card__cfg {
   margin-top: auto;
 }

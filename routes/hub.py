@@ -33,6 +33,30 @@ _MOCK_START = time.time()
 _MOCK_HANDSHAKE_S = 15.0
 
 
+def _mock_sensors(node_name: str) -> dict:
+    """
+    Cele 5 valori de la senzori, simulate per NUME NOD (stabile între
+    polluri — un acelaşi nod = aceeaşi valoare la fiecare /status). În
+    modul real vor veni din EEPROM/RAM-ul hub-ului, populate prin ESP-NOW.
+
+    Câmpurile sunt cele din experimentul nostru (vezi misc/soil_data_complete.csv):
+      - soil_moisture_pct   : umiditate sol, % (convertită din RAW)
+      - soil_temp_c         : temperatură sol, °C
+      - air_temp_c          : temperatură aer, °C
+      - air_humidity_pct    : umiditate aer, %
+      - lux                 : lumină ambient, lx
+    """
+    # Sămânţă deterministă din numele nodului — valori stabile per port.
+    seed = sum(ord(c) for c in node_name)
+    return {
+        "soil_moisture_pct":  round(35.0 + (seed * 7  % 41), 1),  # 35–75 %
+        "soil_temp_c":        round(19.0 + (seed * 3  % 5),  1),  # 19–24 °C
+        "air_temp_c":         round(20.0 + (seed * 11 % 6),  1),  # 20–26 °C
+        "air_humidity_pct":   round(42.0 + (seed * 5  % 22), 1),  # 42–64 %
+        "lux":                round(120.0 + (seed * 13 % 1880)),  # 120–2000 lx
+    }
+
+
 def _mock_hub_status() -> dict:
     """
     Stare simulată a hub-ului pentru DROPWISE_HUB_MODE=mock.
@@ -71,8 +95,8 @@ def _mock_hub_status() -> dict:
             "port": p, "physical": True, "confirmed": True,
             "name": node_name, "valve": False,
             "configured": bool(cfg and cfg.get("configured")),
-            "config": cfg or None,   # config inline — evită un fetch separat
-            "sensors": None,         # TODO(live): date reale de senzori
+            "config": cfg or None,        # config inline — evită un fetch separat
+            "sensors": _mock_sensors(node_name),
         })
     return {
         "ports": ports, "channel": 6, "pump": False,

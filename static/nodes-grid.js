@@ -301,12 +301,8 @@
       const onMonitor = !!card.closest('#node-grid');
       if (!onMonitor) {
         sens.hidden = true;
-      } else if (!sens.dataset.filled) {
-        // TODO(live): randare valori reale de senzori de la nod.
-        sens.innerHTML = port.sensors
-          ? ''
-          : '<span class="node-card__todo">Date senzori — în curând</span>';
-        sens.dataset.filled = '1';
+      } else {
+        renderSensors(sens, port.sensors, port.config);
       }
     } else {
       // --- Nod neconfigurat ---
@@ -356,6 +352,125 @@
     }
   }
   nodes.applyCardColor = applyCardColor;
+
+  // ---------- Senzori (afişaţi pe cardurile din tab-ul Monitor) ----------
+  //
+  // Hub-ul trimite 5 valori per nod în pachetul `/status`:
+  //   soil_moisture_pct, soil_temp_c, air_temp_c, air_humidity_pct, lux
+  // Cât timp datele sunt mock, valorile sunt deterministe per nume nod.
+
+  // Definiţia rândurilor: eticheta + cheia din JSON + unitate + zecimale.
+  const SENSOR_ROWS = [
+    { key: 'soil_moisture_pct', label: 'Umiditate sol',  unit: '%',  dec: 1 },
+    { key: 'soil_temp_c',       label: 'Temp. sol',      unit: '°C', dec: 1 },
+    { key: 'air_temp_c',        label: 'Temp. aer',      unit: '°C', dec: 1 },
+    { key: 'air_humidity_pct',  label: 'Umiditate aer',  unit: '%',  dec: 1 },
+    { key: 'lux',               label: 'Lumină',         unit: 'lx', dec: 0 },
+  ];
+
+  // SVG triunghi cu semn de exclamare — afişat la stânga valorii în alertă.
+  const ALERT_ICON =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" ' +
+    'aria-hidden="true">' +
+    '<path d="M12 3 L 22 20 H 2 Z"/>' +
+    '<path d="M12 10 v 5"/>' +
+    '<path d="M12 18 h 0.01"/>' +
+    '</svg>';
+
+  /**
+   * Verifică pragurile de lumină din config-ul plantei şi întoarce
+   * obiectul de alertă (sau null dacă e ok / lipsă config).
+   */
+  function checkLuxAlert(lux, plantId) {
+    if (lux == null || Number.isNaN(lux) || !plantId || !nodes.catalog) return null;
+    const p = nodes.catalog.plants.find((x) => x.id === plantId);
+    if (!p) return null;
+    const min = p.lux_min;
+    const max = p.lux_max;
+    if (min != null && lux < min) {
+      return {
+        kind: 'low',
+        message:
+          `Lumină insuficientă pentru ${p.name}: ${Math.round(lux)} lx ` +
+          `(recomandat peste ${min} lx). ` +
+          `Mută planta mai aproape de o sursă de lumină sau adaugă o lampă de creştere.`,
+      };
+    }
+    if (max != null && lux > max) {
+      return {
+        kind: 'high',
+        message:
+          `Lumină excesivă pentru ${p.name}: ${Math.round(lux)} lx ` +
+          `(recomandat sub ${max} lx). ` +
+          `Mută planta mai departe de fereastră sau filtrează lumina cu o perdea.`,
+      };
+    }
+    return null;
+  }
+
+  function renderSensors(container, sensors, config) {
+    if (!sensors) {
+      container.innerHTML =
+        '<span class="node-card__todo">Date senzori indisponibile</span>';
+      return;
+    }
+    const plantId = config && config.plant ? config.plant.id : null;
+    const luxAlert = checkLuxAlert(sensors.lux, plantId);
+
+    // Construim mai întâi un nou snapshot şi-l comparăm cu cel cached
+    // pentru a evita reflow-ul inutil la fiecare poll. Snapshot-ul include
+    // şi starea de alertă, ca să se re-randeze când planta intră/iese din
+    // zona de avertizare.
+    const values = SENSOR_ROWS.map((r) => {
+      const v = sensors[r.key];
+      return (v == null || Number.isNaN(v)) ? '—' : Number(v).toFixed(r.dec);
+    });
+    const alertKey = luxAlert ? luxAlert.kind + ':' + luxAlert.message : 'ok';
+    const snap = values.join('|') + '#' + alertKey;
+    if (container.dataset.snap === snap) return;
+    container.dataset.snap = snap;
+
+    container.innerHTML = '';
+    const dl = document.createElement('dl');
+    dl.className = 'sensor-list';
+    SENSOR_ROWS.forEach((r, i) => {
+      const dt = document.createElement('dt');
+      dt.className = 'sensor-list__label';
+      dt.textContent = r.label;
+
+      const dd = document.createElement('dd');
+      dd.className = 'sensor-list__value';
+
+      // Alertă (doar pe rândul Lumină) — triunghi cu tooltip pe hover.
+      if (r.key === 'lux' && luxAlert) {
+        dd.classList.add('sensor-list__value--alert');
+        const alertWrap = document.createElement('span');
+        alertWrap.className = 'sensor-list__alert';
+        alertWrap.innerHTML = ALERT_ICON;
+        const tip = document.createElement('span');
+        tip.className = 'sensor-list__tip';
+        tip.textContent = luxAlert.message;
+        alertWrap.appendChild(tip);
+        // Accesibilitate: tooltip fallback nativ pe titlu.
+        alertWrap.setAttribute('title', luxAlert.message);
+        dd.appendChild(alertWrap);
+      }
+
+      const val = document.createElement('span');
+      val.className = 'sensor-list__num';
+      val.textContent = values[i];
+      const unit = document.createElement('span');
+      unit.className = 'sensor-list__unit';
+      unit.textContent = r.unit;
+      dd.appendChild(val);
+      dd.appendChild(unit);
+
+      dl.appendChild(dt);
+      dl.appendChild(dd);
+    });
+    container.appendChild(dl);
+  }
 
   // ---------- Resetare nod ----------
   //
