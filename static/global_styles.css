@@ -269,6 +269,36 @@ p {
   transform: translateX(4px);
 }
 
+/* Spinner pentru butoane în starea de încărcare — cerc cu un arc lipsă
+   care se roteşte continuu. Foloseşte currentColor, deci preia culoarea
+   textului butonului (mint pe primary, alb pe ghost, etc.). */
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.7s linear infinite;
+  vertical-align: -2px;
+  margin-right: var(--space-2);
+  opacity: 0.85;
+}
+
+.btn--loading {
+  cursor: progress;
+}
+
+/* Pe butoanele care folosesc .btn__arrow (săgeata care alunecă la hover),
+   ascundem săgeata cât timp e încărcare — face loc spinner-ului. */
+.btn--loading .btn__arrow {
+  display: none;
+}
+
+@keyframes btn-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ---------- 7. Card cu efect de sticlă ---------- */
 .glass {
   background: var(--color-surface);

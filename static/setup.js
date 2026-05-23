@@ -83,8 +83,7 @@
 
   async function scanForHubs() {
     clearError();
-    el.btnScan.disabled = true;
-    el.btnScan.querySelector('.btn__label').textContent = 'Se scanează…';
+    setScanLoading(true, 'Se scanează…');
     el.scanHint.textContent = 'Căutare hub-uri Bluetooth în apropiere…';
     hide(el.deviceList);
 
@@ -97,9 +96,30 @@
       showError('Scanare eşuată: ' + e.message);
       el.scanHint.textContent = 'Apasă „Scanează Bluetooth" pentru a reîncerca.';
     } finally {
-      el.btnScan.disabled = false;
-      el.btnScan.querySelector('.btn__label').textContent = 'Scanează din nou';
+      setScanLoading(false, 'Scanează din nou');
     }
+  }
+
+  /** Comută butonul Scanează în starea de încărcare (spinner + text). */
+  function setScanLoading(on, labelText) {
+    const btn = el.btnScan;
+    const label = btn.querySelector('.btn__label');
+    btn.disabled = !!on;
+    if (on) {
+      btn.classList.add('btn--loading');
+      // Inserăm spinner-ul în faţa label-ului (o singură dată).
+      if (!btn.querySelector('.btn-spinner')) {
+        const spinner = document.createElement('span');
+        spinner.className = 'btn-spinner';
+        spinner.setAttribute('aria-hidden', 'true');
+        btn.insertBefore(spinner, label);
+      }
+    } else {
+      btn.classList.remove('btn--loading');
+      const spinner = btn.querySelector('.btn-spinner');
+      if (spinner) spinner.remove();
+    }
+    if (labelText) label.textContent = labelText;
   }
 
   /** Construieşte lista de dispozitive găsite. */
@@ -277,8 +297,10 @@
     }
     clearError();
     // Codul de acces e obligatoriu înainte de a finaliza conectarea.
+    // Trimitem IP-ul hub-ului ca context, fiindcă el nu e încă în state.json
+    // — abia POST /api/setup/connect (care cere autentificare) îl salvează.
     if (window.Dropwise && window.Dropwise.openAuthDialog) {
-      window.Dropwise.openAuthDialog(doConnect);
+      window.Dropwise.openAuthDialog(doConnect, { hubIp: lastResult.ip });
     } else {
       doConnect();
     }

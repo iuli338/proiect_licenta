@@ -871,28 +871,9 @@
   justify-content: flex-end;
 }
 
-/* Spinner pe buton — cerc cu un arc lipsă, rotit infinit. Folosit pe
-   "Actualizează" cât timp aşteptăm răspunsul nodului. */
-.btn-spinner {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border: 2px solid currentColor;
-  border-right-color: transparent;
-  border-radius: 50%;
-  animation: params-spin 0.7s linear infinite;
-  vertical-align: -2px;
-  margin-right: var(--space-2);
-  opacity: 0.85;
-}
-
-.btn--loading {
-  cursor: progress;
-}
-
-@keyframes params-spin {
-  to { transform: rotate(360deg); }
-}
+/* Spinner-ul de buton (`.btn-spinner`, `.btn--loading`) e definit global
+   în global_styles.css ca să fie reutilizabil în toate fluxurile (params,
+   wizard, setup). */
 
 /* Toast de confirmare/eroare — apare după "Actualizează", cu pictogramă
    şi animaţie subtilă de slide-in. Vizibilitatea se controlează prin
