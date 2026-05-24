@@ -107,6 +107,8 @@ void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     int existing = findPortForName(msg.nodeName);
     if (existing >= 0) {
       sendAck(mac, msg.nodeName);
+      // Marcăm "ultima dată văzut" pentru nodul deja cunoscut.
+      statsTouchLastSeen(msg.nodeName);
       return;
     }
 
@@ -124,6 +126,7 @@ void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     Serial.println(port + 1);
 
     sendAck(mac, msg.nodeName);
+    statsTouchLastSeen(msg.nodeName);
     drawCircles();
   }
 }

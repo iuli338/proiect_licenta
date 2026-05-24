@@ -172,6 +172,53 @@ bool storageSaveStats(const char* nodeName, const NodeStats& s) {
   return eepromWrite(statsOffset(slot), (const uint8_t*)&s, sizeof(s));
 }
 
+// ---------- Update helpers (NodeStats) ----------
+
+// Înregistrează o udare reuşită pentru un nod: incrementează totalWaterings,
+// adaugă ml-ii livraţi, setează lastWatering la epoch-ul curent din RTC.
+// Apelat din state machine-ul de udare după finalizarea ciclului.
+//
+// Protejat de guard-ul i2cBusyDepth ca să nu se intersecteze cu OLED.
+bool statsRecordWatering(const char* nodeName, uint16_t ml) {
+  int slot = nodeIndex(nodeName);
+  if (slot < 0 || !eepromReady) return false;
+
+  NodeStats st;
+  if (!storageLoadStats(nodeName, st)) return false;
+
+  st.totalWaterings++;
+  st.totalMl     += ml;
+  st.lastDoseMl   = ml;
+  uint32_t now = rtcEpoch();
+  if (now != 0) st.lastWatering = now;
+
+  i2cBusyDepth++;
+  bool ok = storageSaveStats(nodeName, st);
+  i2cBusyDepth--;
+  return ok;
+}
+
+// Marchează ultima oră de comunicare cu nodul (heartbeat / SENSE / HELLO).
+// Apelat din onDataRecv când vine un mesaj de la un nod cunoscut. Pentru
+// moment, HELLO-ul din ESP-NOW poate apela asta; SENSE-ul va veni ulterior.
+bool statsTouchLastSeen(const char* nodeName) {
+  int slot = nodeIndex(nodeName);
+  if (slot < 0 || !eepromReady) return false;
+  uint32_t now = rtcEpoch();
+  if (now == 0) return false;   // fără RTC nu avem ce scrie
+
+  NodeStats st;
+  if (!storageLoadStats(nodeName, st)) return false;
+  // Optimizare: nu rescriem dacă diferenţa e <60s — evităm uzura EEPROM.
+  if (st.lastSeen != 0 && (now - st.lastSeen) < 60) return true;
+  st.lastSeen = now;
+
+  i2cBusyDepth++;
+  bool ok = storageSaveStats(nodeName, st);
+  i2cBusyDepth--;
+  return ok;
+}
+
 // Ştergerea unui nod (resetare completă a slot-ului).
 bool storageClearNode(const char* nodeName) {
   int slot = nodeIndex(nodeName);

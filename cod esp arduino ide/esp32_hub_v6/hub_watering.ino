@@ -54,14 +54,34 @@ void updateWateringStateMachine() {
 
     case PHASE_PUMP_STOPPING:
       if (now - phaseStartTime >= PUMP_STOP_DELAY) {
+        int finishedPort = wateringPort;
         // Inchide valva
-        if (wateringPort >= 0) {
-          digitalWrite(valvePin[wateringPort], LOW);
-          valveOn[wateringPort] = false;
+        if (finishedPort >= 0) {
+          digitalWrite(valvePin[finishedPort], LOW);
+          valveOn[finishedPort] = false;
         }
         wateringPort = -1;
         wateringPhase = PHASE_IDLE;
         Serial.println("Watering stopped completely");
+
+        // Înregistrăm udarea în statisticile EEPROM ale nodului.
+        // Doza livrată: o estimăm din `doseEstimatMl` salvat la
+        // configurare (aproximaţie până la regulator PI cu debitmetru).
+        if (finishedPort >= 0 && portConfirmed[finishedPort]) {
+          const char* name = portName[finishedPort];
+          RegParams rp;
+          uint16_t ml = 0;
+          if (storageLoadParams(name, rp)) {
+            ml = rp.doseEstimatMl;
+          }
+          if (statsRecordWatering(name, ml)) {
+            Serial.print("Stats updated for ");
+            Serial.print(name);
+            Serial.print(": +");
+            Serial.print(ml);
+            Serial.println(" ml");
+          }
+        }
       }
       break;
 
