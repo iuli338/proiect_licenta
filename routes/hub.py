@@ -8,6 +8,7 @@ Blueprint: Monitorizare + Control (proxy/mock hub)
 """
 
 import time
+from typing import Optional
 
 from flask import Blueprint, jsonify, abort
 
@@ -98,11 +99,14 @@ def _mock_hub_status() -> dict:
             "config": cfg or None,        # config inline — evită un fetch separat
             "sensors": _mock_sensors(node_name),
         })
+    # Ora curentă (server-side în mock) — pe live vine din RTC hub.
+    now = time.localtime()
     return {
         "ports": ports, "channel": 6, "pump": False,
         "wateringPort": -1, "mock": True,
         # IP-ul hub-ului — pentru cardul de stare de pe Monitor.
         "ip": state["hub"].get("ip") or "192.168.1.50",
+        "time": f"{now.tm_hour:02d}:{now.tm_min:02d}",
     }
 
 
@@ -131,15 +135,115 @@ def api_hub_status():
                          headers=auth.hub_headers())
         r.raise_for_status()
         data = r.json()
-        # Îmbogăţim porturile cu starea de configurare din state.json.
+
+        # Detectare reboot hub: uptime scade brusc → invalidăm tot cache-ul
+        # de config (poate s-a schimbat ce e în EEPROM între timp).
+        global _LAST_HUB_UPTIME_MS
+        new_uptime = int(data.get("uptime_ms") or 0)
+        if new_uptime and new_uptime < _LAST_HUB_UPTIME_MS:
+            _invalidate_all_node_cfg_cache()
+        _LAST_HUB_UPTIME_MS = new_uptime
+
+        # Îmbogăţim porturile cu configul real, citit din EEPROM-ul hub-ului
+        # (sursa unică de adevăr pe live). Pe nodurile neconfirmate (slot
+        # gol / handshake) sărim fetch-ul — nu există config relevant.
+        # Configul vine din cache (TTL infinit, invalidat la POST sau reboot).
+        headers = auth.hub_headers()
         for port in data.get("ports", []):
-            cfg = state["nodes"].get(port.get("name"))
+            name = port.get("name")
+            if not name or not port.get("confirmed"):
+                port["configured"] = False
+                port["config"] = None
+                continue
+            cfg = _fetch_node_config_cached(hub_ip, name, headers)
             port["configured"] = bool(cfg and cfg.get("configured"))
             port["config"] = cfg or None
         data.setdefault("ip", hub_ip)   # IP-ul hub-ului pentru cardul Monitor
         return jsonify({"online": True, "data": data})
     except requests.RequestException as e:
         return jsonify({"online": False, "error": str(e)}), 200
+
+
+# Cache de config-uri per nod. Configurarea NU se schimbă decât prin POST,
+# deci cache-ul e LUNG (fără TTL): un singur fetch per nod per sesiune, plus
+# refetch când:
+#   - utilizatorul trimite un POST (invalidate_node_cfg_cache);
+#   - hub-ul s-a restartat (uptime scade — vezi mai jos);
+#   - apare un nod nou care nu e în cache.
+_NODE_CFG_CACHE: dict[str, dict] = {}
+_LAST_HUB_UPTIME_MS: int = 0
+
+
+def _fetch_node_config_cached(hub_ip: str, name: str,
+                              headers: dict) -> Optional[dict]:
+    """Întoarce configul unui nod din cache; face fetch DOAR dacă lipseşte."""
+    cached = _NODE_CFG_CACHE.get(name)
+    if cached is not None:
+        return cached
+    try:
+        r = requests.get(
+            f"http://{hub_ip}/node/{name}/config",
+            timeout=1.5, headers=headers,
+        )
+        if r.status_code == 200:
+            cfg = r.json()
+            _NODE_CFG_CACHE[name] = cfg
+            return cfg
+    except requests.RequestException:
+        pass
+    return None
+
+
+def invalidate_node_cfg_cache(name: str) -> None:
+    """Şters din rute când trimitem un config nou (POST /api/node/<P>)."""
+    _NODE_CFG_CACHE.pop(name, None)
+
+
+def _invalidate_all_node_cfg_cache() -> None:
+    _NODE_CFG_CACHE.clear()
+
+
+@bp.route("/api/hub/time", methods=["POST"])
+@login_required
+def api_hub_set_time():
+    """
+    Setează ora RTC pe hub. Body: {"time": "HH:MM"}.
+    În mock: validăm formatul şi simulăm succesul (nu putem schimba ora
+    serverului). În live: proxy POST /time la hub cu X-Access-Code.
+    """
+    data = (abort if False else None)  # placeholder
+    from flask import request
+    payload = request.get_json(silent=True) or {}
+    t = (payload.get("time") or "").strip()
+    # Validare format strict HH:MM.
+    if len(t) != 5 or t[2] != ":" or not (t[:2].isdigit() and t[3:].isdigit()):
+        return jsonify({"error": "format invalid (HH:MM)"}), 400
+    hh, mm = int(t[:2]), int(t[3:])
+    if not (0 <= hh <= 23 and 0 <= mm <= 59):
+        return jsonify({"error": "valori in afara intervalului"}), 400
+
+    if nodes.get_hub_mode() == "mock":
+        # Mock-ul nu poate schimba ora serverului — confirmăm doar.
+        return jsonify({"ok": True, "time": t, "mock": True})
+
+    state = load_state()
+    hub_ip = state["hub"].get("ip")
+    if not hub_ip:
+        return jsonify({"error": "hub_ip_not_set"}), 503
+    if requests is None:
+        return jsonify({"error": "requests_not_installed"}), 500
+    try:
+        r = requests.post(
+            f"http://{hub_ip}/time",
+            json={"time": t},
+            headers=auth.hub_headers(),
+            timeout=4,
+        )
+        if r.status_code != 200:
+            return jsonify({"error": f"hub a raspuns {r.status_code}"}), 502
+        return jsonify(r.json())
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 502
 
 
 @bp.route("/api/hub/logs")
