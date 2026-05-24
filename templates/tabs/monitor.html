@@ -27,6 +27,10 @@
             <dt>Canal WiFi</dt>
             <dd id="hub-card-channel">—</dd>
           </div>
+          <div class="hub-card__meta-item">
+            <dt>Ora hub</dt>
+            <dd id="hub-card-time">—</dd>
+          </div>
         </dl>
         <button type="button" id="btn-diagnostics"
                 class="btn btn--ghost hub-card__diag">
@@ -52,7 +56,7 @@
             <span class="wizard__node-sub">· 24 ore</span>
           </p>
           <button type="button" id="graph-download-csv"
-                  class="btn btn--ghost graph-header__csv">
+                  class="btn btn--ghost graph-header__csv graph-content">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
                  aria-hidden="true">
@@ -64,7 +68,17 @@
           </button>
         </div>
 
-        <div class="graph-grid graph-grid--row1">
+        {# Card orizontal de loading — vizibil cât timp aşteptăm datele
+           de la hub. Restul conţinutului (grafice + buton CSV) e marcat
+           `graph-content` şi ascuns prin .graph-loading[data-loading]. #}
+        <div id="graph-loader" class="panel graph-loader-card" hidden>
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="graph-loader-card__text">
+            Se încarcă datele de la hub…
+          </span>
+        </div>
+
+        <div class="graph-grid graph-grid--row1 graph-content">
           <div class="panel graph-card">
             <h3 class="graph-card__title">Umiditate sol</h3>
             <div class="graph-card__canvas-wrap">
@@ -81,7 +95,7 @@
           </div>
         </div>
 
-        <div class="graph-grid graph-grid--row2">
+        <div class="graph-grid graph-grid--row2 graph-content">
           <div class="panel graph-card">
             <h3 class="graph-card__title">Temp. sol</h3>
             <div class="graph-card__canvas-wrap">

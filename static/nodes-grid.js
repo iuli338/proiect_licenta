@@ -43,6 +43,13 @@
       setHubCard('online', j.data);
       renderNodeGrid(j.data.ports || [], el.nodeGrid);
 
+      // Stocăm ultimele date de status într-un global accesibil altor module
+      // (ex: settings.js pentru afişarea orei). Plus eveniment custom pentru
+      // sincronizare reactivă.
+      window.Dropwise = window.Dropwise || {};
+      window.Dropwise.lastHubData = j.data;
+      window.dispatchEvent(new CustomEvent('dropwise:hub-status-updated'));
+
       // Detectare boot nou: uptime scade vs. ce ţineam minte.
       const upt = j.data.uptime_ms;
       if (upt != null) {
@@ -102,6 +109,7 @@
     const detail  = card.querySelector('#hub-card-detail');
     const ipEl    = card.querySelector('#hub-card-ip');
     const chEl    = card.querySelector('#hub-card-channel');
+    const timeEl  = card.querySelector('#hub-card-time');
 
     if (state === 'online') {
       stateEl.textContent = 'Hub online';
@@ -109,16 +117,19 @@
       ipEl.textContent = (data && data.ip) || '—';
       chEl.textContent = (data && data.channel != null)
         ? String(data.channel) : '—';
+      if (timeEl) timeEl.textContent = (data && data.time) || '—';
     } else if (state === 'offline') {
       stateEl.textContent = 'Hub-ul nu răspunde';
       detail.textContent = 'Verifică alimentarea şi conexiunea la reţea.';
       ipEl.textContent = '—';
       chEl.textContent = '—';
+      if (timeEl) timeEl.textContent = '—';
     } else {
       stateEl.textContent = 'Hub neconectat';
       detail.textContent = 'Introdu codul de acces pentru a vedea starea.';
       ipEl.textContent = '—';
       chEl.textContent = '—';
+      if (timeEl) timeEl.textContent = '—';
     }
   }
   nodes.setHubCard = setHubCard;
@@ -895,6 +906,11 @@
     view.hidden = false;
     nodes.stopMonitorPolling && nodes.stopMonitorPolling();
 
+    // Afişăm card-ul de loading în locul graficelor + butonului CSV cât
+    // timp aşteptăm Chart.js + datele de la hub. Pe live, fetch-ul către
+    // hub poate dura câteva secunde (ESP-NOW + EEPROM read).
+    setGraphLoading(true);
+
     // Curăţăm graficele anterioare (dacă se redeschide pagina).
     activeCharts.forEach((c) => c.destroy());
     activeCharts = [];
@@ -914,6 +930,7 @@
       view.querySelectorAll('.graph-card__canvas').forEach((c) => {
         c.parentElement.innerHTML = '<p class="setup-hint">Eroare la încărcarea graficelor: ' + e.message + '</p>';
       });
+      setGraphLoading(false);
       graphViewOpening = false;
       return;
     }
@@ -1112,7 +1129,18 @@
       activeCharts.push(c);
     });
 
+    setGraphLoading(false);
     graphViewOpening = false;
+  }
+
+  /** Comută între starea de loading (card central) şi conţinutul real
+      (grafice + buton CSV) pe pagina Grafice. */
+  function setGraphLoading(on) {
+    const loader = document.getElementById('graph-loader');
+    if (loader) loader.hidden = !on;
+    document.querySelectorAll('#node-graph .graph-content').forEach((el) => {
+      el.hidden = !!on;
+    });
   }
 
   /**

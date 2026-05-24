@@ -28,6 +28,16 @@ void drawCircles() {
     display.print(" W:");
     display.print(portName[wateringPort]);
   }
+
+  // Ora din RTC, aliniată la dreapta — format HH:MM european.
+  // Font default 6 px/char × 5 caractere = 30 px lăţime; ecran 128 px.
+  if (rtcOk) {
+    char buf[6];
+    snprintf(buf, sizeof(buf), "%02u:%02u", rtcHour, rtcMinute);
+    int x = SCREEN_WIDTH - 30;   // 5 char × 6 px
+    display.setCursor(x, 12);
+    display.print(buf);
+  }
   display.println();
 
   // Stare EEPROM extern — indica daca persistenta locala e activa.

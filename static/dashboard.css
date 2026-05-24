@@ -430,3 +430,68 @@ kbd {
     display: inline;
   }
 }
+
+
+/* ---------- Setări — panel pentru ora hub ---------- */
+
+.settings-time {
+  margin-bottom: var(--space-5);
+}
+
+.settings-time__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.settings-time__label {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.settings-time__display {
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: var(--color-text);
+  min-width: 4ch;
+}
+
+.settings-time__input {
+  width: 96px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.05em;
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+
+.settings-time__input:focus {
+  outline: none;
+  border-color: var(--color-mint);
+}
+
+.settings-time__actions {
+  display: inline-flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.settings-time__btn {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--fs-sm);
+}
+
+.settings-time__hint {
+  margin: var(--space-3) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+  max-width: none;
+}

@@ -153,6 +153,16 @@ void handleStatus() {
   // (uptime scade brusc => boot nou => recer log-ul de diagnostic).
   json += ",\"uptime_ms\":";
   json += (uint32_t)millis();
+  // Ora curentă din RTC, format HH:MM (european). Null dacă RTC absent.
+  if (rtcOk) {
+    char tbuf[6];
+    snprintf(tbuf, sizeof(tbuf), "%02u:%02u", rtcHour, rtcMinute);
+    json += ",\"time\":\"";
+    json += tbuf;
+    json += "\"";
+  } else {
+    json += ",\"time\":null";
+  }
   json += "}";
 
   sendCorsHeaders();
@@ -197,6 +207,53 @@ void handleDiagnostics() {
 void handleOptions() {
   sendCorsHeaders();
   server.send(204);
+}
+
+// Setarea orei RTC din UI — POST /time, body: {"time":"HH:MM"}.
+// Validare strictă: ambele câmpuri 2 cifre, 00..23 şi 00..59.
+void handleSetTime() {
+  if (!checkAccessCode()) return;
+  sendCorsHeaders();
+
+  if (!rtcOk) {
+    server.send(503, "application/json", "{\"error\":\"rtc absent\"}");
+    return;
+  }
+
+  String body = server.hasArg("plain") ? server.arg("plain") : "";
+  // Parsing simplu — căutăm \"time\":\"HH:MM\".
+  int k = body.indexOf("\"time\"");
+  if (k < 0) {
+    server.send(400, "application/json", "{\"error\":\"missing time\"}");
+    return;
+  }
+  int q1 = body.indexOf('"', body.indexOf(':', k) + 1);
+  int q2 = body.indexOf('"', q1 + 1);
+  if (q1 < 0 || q2 < 0 || q2 - q1 != 6) {
+    server.send(400, "application/json", "{\"error\":\"format invalid (HH:MM)\"}");
+    return;
+  }
+  String t = body.substring(q1 + 1, q2);   // "HH:MM"
+  if (t.length() != 5 || t.charAt(2) != ':') {
+    server.send(400, "application/json", "{\"error\":\"format invalid\"}");
+    return;
+  }
+  int hh = t.substring(0, 2).toInt();
+  int mm = t.substring(3, 5).toInt();
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) {
+    server.send(400, "application/json", "{\"error\":\"valori in afara intervalului\"}");
+    return;
+  }
+  if (!rtcSetHourMinute((uint8_t)hh, (uint8_t)mm)) {
+    server.send(500, "application/json", "{\"error\":\"rtc write failed\"}");
+    return;
+  }
+  Serial.print("RTC: ora setata manual la ");
+  Serial.print(hh); Serial.print(":"); Serial.println(mm);
+
+  char resp[40];
+  snprintf(resp, sizeof(resp), "{\"ok\":true,\"time\":\"%02d:%02d\"}", hh, mm);
+  server.send(200, "application/json", resp);
 }
 
 // Sterge credentialele la cerere de la dashboard (reset de la distanta).

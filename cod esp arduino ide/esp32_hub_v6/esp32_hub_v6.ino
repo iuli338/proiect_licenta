@@ -301,6 +301,19 @@ bool               oledOk                  = false;
 bool               rtcOk                   = false;
 #define RTC_I2C_ADDR       0x68      // adresa standard DS1307/DS3231
 
+// Ora curentă citită de la RTC — actualizată periodic în loopNormal.
+// Cache RAM ca să nu apelăm I²C la fiecare drawCircles (40 Hz).
+uint8_t            rtcHour                 = 0;
+uint8_t            rtcMinute               = 0;
+uint8_t            rtcSecond               = 0;
+unsigned long      lastRtcRead             = 0;
+#define RTC_READ_INTERVAL_MS  1000   // citire la 1 s
+
+// ---------- Reset runtime prin butonul BOOT ----------
+// Permite ţinerea BOOT 3 sec şi în mod normal (nu doar la pornire) ca
+// să resetăm hub-ul în BLE provisioning fără power-cycle.
+unsigned long      bootPressedSince        = 0;   // 0 = nu apăsat acum
+
 // ---------- Reconectare WiFi ----------
 // Dacă WiFi-ul cade după ce am intrat în mod normal, încercăm o reconectare
 // la fiecare 5 secunde, la infinit. OLED-ul afişează "Reconnecting..." în
@@ -349,6 +362,10 @@ void setup() {
 
   // Display — initializat in ambele moduri.
   Wire.begin(21, 22);
+  // Forţăm 50 kHz pe bus-ul partajat (OLED + EEPROM + RTC). 100/400 kHz
+  // dă glitch-uri OLED când cablajul are capacitate mare, fire lungi pe
+  // breadboard sau pull-up-uri slabe. 50 kHz e ultra-conservator.
+  Wire.setClock(50000);
   display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDR);
 
   display.clearDisplay();
@@ -377,6 +394,9 @@ void setup() {
   bootLogf("OLED  - %s\n", oledOk      ? "OK" : "lipsa");
   bootLogf("EEPROM - %s\n", eepromReady ? "OK" : "lipsa");
   bootLogf("RTC   - %s\n", rtcOk       ? "OK" : "lipsa (optional)");
+
+  // RTC: citim ora curenta o data ca sa apara pe OLED de la primul frame.
+  rtcInit();
 
   // Pompa + valve — initializate in ambele moduri (siguranta).
   pinMode(PIN_PUMP, OUTPUT);

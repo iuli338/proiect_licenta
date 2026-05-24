@@ -270,6 +270,10 @@ void startNormalMode() {
   server.on("/diagnostics", HTTP_GET,     handleDiagnostics);
   server.on("/diagnostics", HTTP_OPTIONS, handleOptions);
 
+  // Setare ora RTC din UI (Setări).
+  server.on("/time", HTTP_POST,    handleSetTime);
+  server.on("/time", HTTP_OPTIONS, handleOptions);
+
   // Toggle individual pe pini (din tab-ul Control)
   server.on("/toggle/16", HTTP_GET, handleToggle16);
   server.on("/toggle/17", HTTP_GET, handleToggle17);
@@ -329,6 +333,10 @@ void checkWifiReconnect() {
 // Bucla modului normal — logica originala de functionare.
 void loopNormal() {
 
+  // Verifică BOOT runtime — răspunde mereu, indiferent de starea I²C.
+  checkRuntimeReset();
+
+
   // Sărim peste handle-uirea de alte cereri HTTP cât suntem în mijlocul
   // unei tranzacţii EEPROM. Cererile noi vor fi acceptate la următorul
   // tur de buclă, după ce write-ul curent s-a terminat. Acelaşi guard
@@ -339,6 +347,7 @@ void loopNormal() {
     updateConnectorDetection();
     updateWateringStateMachine();
     checkWifiReconnect();
+    rtcUpdateCache();
   }
 
   if (millis() - lastBlink > 400 && i2cBusyDepth == 0) {
@@ -374,6 +383,38 @@ void loopNormal() {
 // ============================================================
 //  Reset provisioning prin butonul BOOT
 // ============================================================
+
+// Verifica butonul BOOT in MOD NORMAL (runtime). Daca e tinut apasat
+// 3 secunde, sterge credentialele si restarteaza in BLE provisioning.
+// Apelata pe fiecare iteratie a loopNormal (cost mic — un digitalRead).
+void checkRuntimeReset() {
+  bool pressed = (digitalRead(PIN_BOOT_BTN) == LOW);
+
+  if (!pressed) {
+    bootPressedSince = 0;
+    return;
+  }
+
+  if (bootPressedSince == 0) {
+    // Tocmai a fost apasat — pornim cronometrul.
+    bootPressedSince = millis();
+    Serial.println("BOOT pressed — tine 3 sec pentru reset provisioning");
+    return;
+  }
+
+  if (millis() - bootPressedSince >= RESET_HOLD_MS) {
+    Serial.println("Reset confirmat runtime — sterg credentiale + reboot");
+    drawProvisioningScreen("Reset BLE...");
+    clearCredentials();
+    // Feedback vizual: LED-ul intern clipeste rapid.
+    for (int i = 0; i < 6; i++) {
+      digitalWrite(PIN_STATUS_LED, HIGH); delay(80);
+      digitalWrite(PIN_STATUS_LED, LOW);  delay(80);
+    }
+    delay(500);
+    ESP.restart();
+  }
+}
 
 // Daca butonul BOOT e tinut apasat la pornire, sterge credentialele.
 void checkResetButton() {

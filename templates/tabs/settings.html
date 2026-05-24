@@ -9,17 +9,33 @@
         </p>
       </header>
 
-      <div class="todo-banner">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M12 9 v4"/>
-          <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
-          <path d="M10.29 3.86 L1.82 18 a 2 2 0 0 0 1.71 3 h16.94 a 2 2 0 0 0 1.71 -3 L13.71 3.86 a 2 2 0 0 0 -3.42 0 z"/>
-        </svg>
-        <span>
-          <strong>TODO</strong>
-          Tab WIP. Va conţine: schimbare credenţiale dashboard, reset provisioning hub,
-          intervalul de polling, export jurnal, despre / versiune.
-        </span>
+      {# Panel: setare ora RTC pe hub. #}
+      <div class="panel settings-time">
+        <div class="settings-time__row">
+          <span class="settings-time__label">Ora pe hub:</span>
+          <span class="settings-time__display" id="settings-time-display">—</span>
+          <input type="text" id="settings-time-input"
+                 class="settings-time__input" placeholder="HH:MM"
+                 maxlength="5" inputmode="numeric" hidden />
+          <div class="settings-time__actions">
+            <button type="button" id="settings-time-edit"
+                    class="btn btn--ghost settings-time__btn">
+              Setează ora
+            </button>
+            <button type="button" id="settings-time-cancel"
+                    class="btn btn--ghost settings-time__btn" hidden>
+              Anulează
+            </button>
+            <button type="button" id="settings-time-save"
+                    class="btn btn--primary settings-time__btn" hidden>
+              <span class="btn__label">Setează</span>
+            </button>
+          </div>
+        </div>
+        <p class="settings-time__hint" id="settings-time-hint" hidden>
+          Format: HH:MM (24 ore). Secundele se resetează la 00.
+        </p>
       </div>
+
     </section>
 
