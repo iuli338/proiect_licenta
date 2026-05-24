@@ -79,15 +79,29 @@ static bool parseNodeNameFromUri(const String& uri, char* out, size_t outLen) {
 
 // ---------- Serializare config + stats ca JSON ----------
 
+// Escape strict pentru JSON. Caracterele non-ASCII (UTF-8 multi-byte) sunt
+// scrise ca \uXX (octet cu octet, în notaţie hex \u00XX) — asta garantează
+// JSON valid indiferent de cum interpretează clientul charset-ul. Altfel,
+// bytes UTF-8 raw (ex: ş = 0xC5 0x9F) pot fi corupţi pe drumul prin Wire.h
+// / WebServer / proxy şi ajung la UI ca "\u0..." trunchiat.
 static String escapeJson(const char* s) {
   String out;
-  out.reserve(strlen(s) + 4);
+  out.reserve(strlen(s) + 8);
+  // `HEX` e macro Arduino (= 16) — folosim alt nume ca să evităm conflictul.
+  static const char HEX_DIGITS[] = "0123456789ABCDEF";
   for (const char* p = s; *p; p++) {
-    char c = *p;
-    if (c == '"' || c == '\\') { out += '\\'; out += c; }
+    unsigned char c = (unsigned char)*p;
+    if (c == '"' || c == '\\') { out += '\\'; out += (char)c; }
     else if (c == '\n') out += "\\n";
     else if (c == '\r') out += "\\r";
-    else out += c;
+    else if (c == '\t') out += "\\t";
+    else if (c < 0x20 || c >= 0x7F) {
+      // Control char sau orice non-ASCII (inclusiv bytes UTF-8) → \u00XX.
+      out += "\\u00";
+      out += HEX_DIGITS[(c >> 4) & 0xF];
+      out += HEX_DIGITS[c & 0xF];
+    }
+    else out += (char)c;
   }
   return out;
 }

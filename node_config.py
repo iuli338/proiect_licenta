@@ -380,10 +380,17 @@ class RealHub:
             access_code = (self.access_code
                            or os.environ.get("DROPWISE_HUB_ACCESS_CODE")
                            or "284095")
+            # IMPORTANT: trimitem cu ensure_ascii=False ca diacriticele
+            # (ă, ş, î etc.) să ajungă pe ESP ca UTF-8 raw (2 octeţi/char),
+            # NU ca literal "\uXXXX" (6 octeţi/char) — altfel câmpurile
+            # char[24] din EEPROM se umplu cu "Substrat pe bază d…"
+            # şi se trunchiază la mijlocul unui escape Unicode.
+            body = json.dumps(flat, ensure_ascii=False).encode("utf-8")
             r = requests.post(
                 f"http://{self.hub_ip}/node/{node}/config",
-                headers={"X-Access-Code": access_code},
-                json=flat, timeout=8,
+                headers={"X-Access-Code": access_code,
+                         "Content-Type": "application/json; charset=utf-8"},
+                data=body, timeout=8,
             )
             r.raise_for_status()
             job.update(status="success",
@@ -443,10 +450,19 @@ def build_node_config(payload: dict) -> tuple[Optional[dict], Optional[str]]:
     soil  = payload.get("soil") or {}
     color = (payload.get("color") or "mint").strip()
 
+    # Lungimea maximă (octeţi UTF-8) pentru numele plantă/sol — limitată
+    # de dimensiunea câmpurilor din EEPROM (char[32], minus \0 = 31 utili).
+    NAME_MAX_BYTES = 31
+
     # --- plantă ---
     plant_name = (plant.get("name") or "").strip()
     if not plant_name:
         return None, "Numele plantei lipseşte."
+    if len(plant_name.encode("utf-8")) > NAME_MAX_BYTES:
+        return None, (
+            f"Numele plantei e prea lung ({len(plant_name.encode('utf-8'))} "
+            f"octeţi UTF-8; max {NAME_MAX_BYTES})."
+        )
     water_need = (plant.get("water_need") or "mediu").strip()
     if water_need not in WATER_NEED_LEVELS:
         return None, "Nivel de necesar de apă invalid."
@@ -457,6 +473,11 @@ def build_node_config(payload: dict) -> tuple[Optional[dict], Optional[str]]:
     soil_name = (soil.get("name") or "").strip()
     if not soil_name:
         return None, "Numele solului lipseşte."
+    if len(soil_name.encode("utf-8")) > NAME_MAX_BYTES:
+        return None, (
+            f"Numele solului e prea lung ({len(soil_name.encode('utf-8'))} "
+            f"octeţi UTF-8; max {NAME_MAX_BYTES})."
+        )
     retention = (soil.get("retention") or "mediu").strip()
     if retention not in RETENTION_LEVELS:
         return None, "Nivel de retenţie a solului invalid."

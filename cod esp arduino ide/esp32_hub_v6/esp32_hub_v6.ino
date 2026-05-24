@@ -115,7 +115,7 @@
 // iniţializăm. La schimbarea layout-ului incrementăm versiunea.
 
 #define EEPROM_MAGIC              "DROPv01"   // 8 B (cu \0)
-#define EEPROM_LAYOUT_VERSION     2   // bump => re-init la urmatorul boot
+#define EEPROM_LAYOUT_VERSION     4   // bump => re-init la urmatorul boot
 
 #define EEPROM_OFFSET_HEADER      0x0000      // 32 B (resv 64 B pana la slot)
 #define EEPROM_OFFSET_CONFIG_P1   0x0040      // 128 B per port
@@ -217,28 +217,30 @@ typedef struct __attribute__((packed)) {
 } EepromHeader;
 
 // Total per câmp:
-//   16 + 24 + 1 + 1   (plant)
-// + 16 + 24 + 1 + 1   (soil)
+//   16 + 32 + 1 + 1   (plant)
+// + 16 + 32 + 1 + 1   (soil)
 // + 12                (color)
 // + 1                 (configured)
-// = 97  =>  reserved[31] => total 128 B
+// = 113  =>  reserved[15] => total 128 B
 // Aliniat pe 128 ca să încapă în 2 pagini de scriere (curat pentru AT24C256).
+// Nume mărite la 32 B ca să încapă UTF-8 raw: "Substrat pe bază de turbă"
+// = 27 octeţi, ar fi trunchiat în 24 B.
 typedef struct __attribute__((packed)) {
   // Plantă
   char     plantId[16];
-  char     plantName[24];
+  char     plantName[32];
   uint8_t  waterNeed;             // 0=scazut, 1=mediu, 2=ridicat
   uint8_t  plantCustom;
   // Sol
   char     soilId[16];
-  char     soilName[24];
+  char     soilName[32];
   uint8_t  retention;             // 0=scazut, 1=mediu, 2=ridicat
   uint8_t  soilCustom;
   // Card
   char     color[12];
   // Flag
   uint8_t  configured;
-  uint8_t  reserved[31];
+  uint8_t  reserved[15];
 } NodeConfig;                     // 128 B
 
 // 5×float + 4×uint16 = 28 B; reserved[36] => 64 B total.

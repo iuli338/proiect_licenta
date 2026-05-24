@@ -254,7 +254,11 @@ bool eepromWrite(uint16_t addr, const uint8_t* buf, size_t len) {
   if (!eepromReady) return false;
   if (addr + len > EEPROM_SIZE_BYTES) return false;
 
-  const size_t MAX_CHUNK = 1;   // byte-write mode — cel mai sigur
+  // Chunk de 16 B: balans bun între viteză şi stabilitate pe bus partajat
+  // OLED + EEPROM + RTC. Pentru zeroizare slot 256 B = 16 page writes ×
+  // ~10 ms = ~160 ms. Dacă VCC marginal, treci la 1 (single-byte) pentru
+  // robusteţe maximă.
+  const size_t MAX_CHUNK = 16;
 
   size_t done = 0;
   while (done < len) {

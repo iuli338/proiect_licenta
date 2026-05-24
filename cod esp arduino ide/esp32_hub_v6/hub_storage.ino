@@ -76,18 +76,30 @@ static bool readHeader(EepromHeader& h) {
   return true;
 }
 
-// Zeroizează un slot, util la init şi la "şters" un nod.
+// Zeroizează un slot. Continuă peste erori intermitente (nu se opreşte
+// la prima pagină ratată) — asta minimizează cazul "slot pe jumătate
+// zeroizat" care produce valori absurde la GET (ex: totalWaterings =
+// 0x7F7F7F7F dacă unele octeţi rămân nesetaţi sau corupţi).
+// Returnează true dacă TOATE chunk-urile au mers; false dacă măcar unul
+// a picat (dar restul s-a tot încercat).
 static bool zeroSlot(uint16_t offset, size_t len) {
   uint8_t zeros[64];
   memset(zeros, 0, sizeof(zeros));
   size_t done = 0;
+  bool allOk = true;
   while (done < len) {
     size_t chunk = len - done;
     if (chunk > sizeof(zeros)) chunk = sizeof(zeros);
-    if (!eepromWrite(offset + done, zeros, chunk)) return false;
+    if (!eepromWrite(offset + done, zeros, chunk)) {
+      Serial.print("zeroSlot: chunk pic la 0x");
+      Serial.println(offset + done, HEX);
+      allOk = false;
+      // NU return — continuăm cu următorul chunk pentru a zeroiza cât
+      // mai mult; un slot complet zeroizat e mai bun decât unul hibrid.
+    }
     done += chunk;
   }
-  return true;
+  return allOk;
 }
 
 // La pornire: dacă header-ul lipseşte, iniţializăm layout-ul (toate slot-urile
@@ -219,12 +231,18 @@ bool statsTouchLastSeen(const char* nodeName) {
   return ok;
 }
 
-// Ştergerea unui nod (resetare completă a slot-ului).
+// Ştergerea unui nod (resetare completă a slot-ului). Zeroizăm TOATE
+// secţiunile (config, params, stats) chiar dacă vreuna pică intermitent —
+// asta evită cazul "slot pe jumătate şters" care confundă UI-ul.
 bool storageClearNode(const char* nodeName) {
   int slot = nodeIndex(nodeName);
   if (slot < 0 || !eepromReady) return false;
-  if (!zeroSlot(configOffset(slot), NODE_CONFIG_SIZE)) return false;
-  if (!zeroSlot(paramsOffset(slot), REG_PARAMS_SIZE))  return false;
-  if (!zeroSlot(statsOffset(slot),  NODE_STATS_SIZE))  return false;
-  return true;
+  bool ok1 = zeroSlot(configOffset(slot), NODE_CONFIG_SIZE);
+  bool ok2 = zeroSlot(paramsOffset(slot), REG_PARAMS_SIZE);
+  bool ok3 = zeroSlot(statsOffset(slot),  NODE_STATS_SIZE);
+  Serial.print("storageClearNode "); Serial.print(nodeName);
+  Serial.print(": cfg="); Serial.print(ok1);
+  Serial.print(" prm="); Serial.print(ok2);
+  Serial.print(" st=");  Serial.println(ok3);
+  return ok1 && ok2 && ok3;
 }
