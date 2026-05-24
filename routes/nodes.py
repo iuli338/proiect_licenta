@@ -295,7 +295,7 @@ def api_node_reset(node_name):
     if node_name not in VALID_NODE_NAMES:
         return jsonify({"error": "nod invalid"}), 400
 
-    # 1. Stergem din state-ul local.
+    # 1. Stergem din state-ul local (relevant doar pe mock; pe live e oricum gol).
     state = load_state()
     state["nodes"].pop(node_name, None)
     save_state(state)
@@ -311,6 +311,9 @@ def api_node_reset(node_name):
                 timeout=5,
             )
             if r.status_code != 200:
+                # Hub-ul a raspuns dar nu cu OK — NU invalidam cache-ul;
+                # configul vechi din EEPROM e inca acolo si vrem sa-l aratam
+                # corect daca user-ul reincearca.
                 return jsonify({
                     "ok": True,
                     "node": node_name,
@@ -323,5 +326,14 @@ def api_node_reset(node_name):
                 "node": node_name,
                 "warning": f"State sters local, dar hub-ul nu raspunde: {e}",
             }), 200
+
+    # 3. Invalidam cache-ul DOAR la reset cu succes (sau pe mock, unde nu
+    # exista hub real). Asta asigura ca urmatorul /status face fetch fresh
+    # si vede slot-ul gol — UI-ul actualizeaza cardul corespunzator.
+    try:
+        from routes.hub import invalidate_node_cfg_cache
+        invalidate_node_cfg_cache(node_name)
+    except Exception:   # noqa: BLE001
+        pass
 
     return jsonify({"ok": True, "node": node_name})
