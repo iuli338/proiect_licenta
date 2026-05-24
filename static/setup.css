@@ -202,6 +202,42 @@
   cursor: not-allowed;
 }
 
+/* Stare invalidă — folosită de validarea de lungime în wizard. */
+.field__input--invalid {
+  border-color: rgba(239, 100, 100, 0.55);
+}
+.field__input--invalid:focus {
+  border-color: #ef6464;
+  box-shadow: 0 0 0 3px rgba(239, 100, 100, 0.18);
+}
+
+/* Meta sub input — contor caractere + mesaj de eroare. */
+.field__meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-top: 4px;
+  min-height: 1em;
+}
+
+.field__counter {
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+}
+
+.field__counter--over {
+  color: #ff8a8a;
+  font-weight: 700;
+}
+
+.field__error {
+  font-size: var(--fs-xs);
+  color: #ff8a8a;
+  text-align: right;
+}
+
 .setup-form__actions {
   display: flex;
   justify-content: flex-end;

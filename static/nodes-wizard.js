@@ -237,11 +237,37 @@
     document.getElementById('plant-next').disabled = false;
   }
 
+  // Lungimea maximă (octeţi UTF-8) pentru numele custom — limitată de
+  // dimensiunea câmpurilor din EEPROM (char[32], minus \0 = 31 utili).
+  const NAME_MAX_BYTES = 31;
+
+  /** Lungimea unui string în octeţi UTF-8 (nu caractere). */
+  function utf8ByteLen(s) {
+    return new TextEncoder().encode(s).length;
+  }
+
+  /** Actualizează contorul + culoarea în funcţie de lungime. */
+  function updateNameCounter(inputId, counterId, errorId) {
+    const inp     = document.getElementById(inputId);
+    const counter = document.getElementById(counterId);
+    const errorEl = document.getElementById(errorId);
+    if (!inp || !counter) return false;
+    const len = utf8ByteLen(inp.value.trim());
+    const over = len > NAME_MAX_BYTES;
+    counter.textContent = len + '/' + NAME_MAX_BYTES;
+    counter.classList.toggle('field__counter--over', over);
+    if (errorEl) errorEl.hidden = !over;
+    inp.classList.toggle('field__input--invalid', over);
+    return !over;
+  }
+
   /** Citeşte formularul de plantă custom şi validează. */
   function syncPlantCustom() {
     const name = document.getElementById('plant-custom-name').value.trim();
     const lvl = currentLevel('water');
-    const ok = name && lvl;
+    const fits = updateNameCounter(
+      'plant-custom-name', 'plant-name-counter', 'plant-name-error');
+    const ok = name && lvl && fits;
     wiz.plant = ok
       ? { id: 'custom', name: name, water_need: lvl, custom: true }
       : null;
@@ -296,7 +322,9 @@
   function syncSoilCustom() {
     const name = document.getElementById('soil-custom-name').value.trim();
     const lvl = currentLevel('retention');
-    const ok = name && lvl;
+    const fits = updateNameCounter(
+      'soil-custom-name', 'soil-name-counter', 'soil-name-error');
+    const ok = name && lvl && fits;
     wiz.soil = ok
       ? { id: 'custom', name: name, retention: lvl, custom: true }
       : null;

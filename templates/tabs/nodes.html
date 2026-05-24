@@ -51,7 +51,13 @@
                 Numele plantei
               </label>
               <input class="field__input" type="text" id="plant-custom-name"
-                     placeholder="ex: Orhidee" />
+                     placeholder="ex: Orhidee" maxlength="40" />
+              <div class="field__meta">
+                <span class="field__counter" id="plant-name-counter">0/31</span>
+                <span class="field__error" id="plant-name-error" hidden>
+                  Numele e prea lung (max 31 octeţi UTF-8).
+                </span>
+              </div>
             </div>
             <div class="field">
               <label class="field__label">Necesar de apă</label>
@@ -85,7 +91,13 @@
                 Numele solului
               </label>
               <input class="field__input" type="text" id="soil-custom-name"
-                     placeholder="ex: Amestec propriu" />
+                     placeholder="ex: Amestec propriu" maxlength="40" />
+              <div class="field__meta">
+                <span class="field__counter" id="soil-name-counter">0/31</span>
+                <span class="field__error" id="soil-name-error" hidden>
+                  Numele e prea lung (max 31 octeţi UTF-8).
+                </span>
+              </div>
             </div>
             <div class="field">
               <label class="field__label">Retenţia apei</label>
