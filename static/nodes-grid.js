@@ -856,10 +856,13 @@
     if (chartJsPromise) return chartJsPromise;
     chartJsPromise = new Promise((resolve, reject) => {
       if (window.Chart) { resolve(window.Chart); return; }
+      // Chart.js servit local din `static/lib/` — proiectul rămâne 100%
+      // funcţional fără internet (doar router în LAN). Pentru update:
+      // descarcă manual https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js
       const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+      s.src = '/static/lib/chart.umd.min.js';
       s.onload = () => resolve(window.Chart);
-      s.onerror = () => reject(new Error('Nu am putut încărca Chart.js'));
+      s.onerror = () => reject(new Error('Nu am putut încărca Chart.js (static/lib/)'));
       document.head.appendChild(s);
     });
     return chartJsPromise;
