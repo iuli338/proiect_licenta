@@ -204,6 +204,33 @@ typedef struct {
   char message[24];
 } EspNowMessage;
 
+// Mesaj cu citiri senzori — primit periodic de la noduri (5 s tipic).
+// NAN denotă senzor absent; serializat în /status ca `null`.
+typedef struct __attribute__((packed)) {
+  char     msgType[8];           // "SENSE"
+  char     nodeName[NAME_LEN];   // "P1"/"P2"/"P3"
+  float    soilMoisturePct;      // 0..100 sau NAN
+  float    soilTempC;
+  float    airTempC;
+  float    airHumidityPct;
+  float    lux;
+  uint32_t uptimeMs;             // de la pornirea nodului
+} SensorMessage;                 // 40 B
+
+// Ultima citire per port — păstrată în RAM. lastUpdateMs = 0 înseamnă
+// că nu am primit niciodată un SENSE de la portul respectiv (frontend
+// afişează "—" pe toate câmpurile). Câmpurile NAN se serializează null.
+typedef struct {
+  float         soilMoisturePct;
+  float         soilTempC;
+  float         airTempC;
+  float         airHumidityPct;
+  float         lux;
+  unsigned long lastUpdateMs;    // millis() la ultima recepţie
+} NodeSensors;
+
+NodeSensors portSensors[NUM_PORTS] = {};
+
 // ---------- Structuri EEPROM ----------
 //
 // Toate sunt POD (Plain Old Data) cu __attribute__((packed)) ca să fim

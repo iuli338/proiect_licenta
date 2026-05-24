@@ -32,6 +32,8 @@ void updateConnectorDetection() {
       portConfirmed[i] = false;
       portName[i][0] = '\0';
       memset(portNodeMac[i], 0, 6);
+      // Curăţăm şi senzorii — la reconectare vom primi un SENSE proaspăt.
+      portSensors[i].lastUpdateMs = 0;
     }
 
     portPhysical[i] = nowPhysical;
@@ -83,8 +85,6 @@ void sendAck(const uint8_t* mac, const char* nodeName) {
 
 void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
 
-  if (len != sizeof(EspNowMessage)) return;
-
   // Dacă suntem în mijlocul unei tranzacţii EEPROM (acelaşi bus I²C cu
   // OLED-ul, partajat indirect prin Wire), ignorăm callback-ul. Nodul îşi
   // va retrimite HELLO-ul după câteva secunde — protocolul lor are deja
@@ -93,6 +93,36 @@ void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
     Serial.println("ESP-NOW: ignor mesaj (EEPROM busy)");
     return;
   }
+
+  // SensorMessage şi EspNowMessage au aceeaşi dimensiune (40 B), aşa că
+  // distingem pe câmpul msgType, nu pe len. Întâi încercăm parsarea ca
+  // SENSE; dacă msgType nu se potriveşte, cădem prin la dispatch-ul vechi
+  // (HELLO etc.).
+  if (len == (int)sizeof(SensorMessage)) {
+    SensorMessage sm;
+    memcpy(&sm, incomingData, sizeof(sm));
+    if (strncmp(sm.msgType, "SENSE", 5) == 0) {
+      int port = findPortForName(sm.nodeName);
+      if (port >= 0 && portConfirmed[port]) {
+        portSensors[port].soilMoisturePct = sm.soilMoisturePct;
+        portSensors[port].soilTempC       = sm.soilTempC;
+        portSensors[port].airTempC        = sm.airTempC;
+        portSensors[port].airHumidityPct  = sm.airHumidityPct;
+        portSensors[port].lux             = sm.lux;
+        portSensors[port].lastUpdateMs    = millis();
+        statsTouchLastSeen(sm.nodeName);
+        Serial.print("SENSE primit de la ");
+        Serial.print(sm.nodeName);
+        Serial.print(" sol=");
+        Serial.print(isnan(sm.soilMoisturePct) ? -1 : sm.soilMoisturePct);
+        Serial.print("% lux=");
+        Serial.println(isnan(sm.lux) ? -1 : sm.lux);
+      }
+      return;
+    }
+  }
+
+  if (len != sizeof(EspNowMessage)) return;
 
   EspNowMessage msg;
   memcpy(&msg, incomingData, sizeof(msg));

@@ -4,6 +4,15 @@
    variabilele globale si include-urile sunt in esp32_hub_v6.ino.
    ============================================================ */
 
+// Format float pentru JSON: NaN / Inf / -Inf → "null".
+// `decimals` controlează numărul de zecimale (umiditate / temperaturi 1, lux 0).
+static String jsonFloat(float v, int decimals) {
+  if (isnan(v) || isinf(v)) return String("null");
+  char buf[16];
+  dtostrf(v, 0, decimals, buf);
+  return String(buf);
+}
+
 // Trimite header-ele CORS — dashboard-ul accesează hub-ul din browser.
 void sendCorsHeaders() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
@@ -140,6 +149,21 @@ void handleStatus() {
     json += portName[i];
     json += "\",\"valve\":";
     json += (valveOn[i] ? "true" : "false");
+    // Citirile senzorilor — null dacă portul nu a trimis încă nimic.
+    // Câmpurile individuale sunt null când senzorul respectiv lipseşte
+    // (NAN convertit prin jsonFloat).
+    json += ",\"sensors\":";
+    if (portConfirmed[i] && portSensors[i].lastUpdateMs > 0) {
+      json += "{\"soil_moisture_pct\":"; json += jsonFloat(portSensors[i].soilMoisturePct, 1);
+      json += ",\"soil_temp_c\":";        json += jsonFloat(portSensors[i].soilTempC,       1);
+      json += ",\"air_temp_c\":";         json += jsonFloat(portSensors[i].airTempC,        1);
+      json += ",\"air_humidity_pct\":";   json += jsonFloat(portSensors[i].airHumidityPct,  1);
+      json += ",\"lux\":";                json += jsonFloat(portSensors[i].lux,             0);
+      json += ",\"age_ms\":";             json += (uint32_t)(millis() - portSensors[i].lastUpdateMs);
+      json += "}";
+    } else {
+      json += "null";
+    }
     json += "}";
   }
 

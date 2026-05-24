@@ -645,10 +645,12 @@
     // Construim mai întâi un nou snapshot şi-l comparăm cu cel cached
     // pentru a evita reflow-ul inutil la fiecare poll. Snapshot-ul include
     // şi starea de alertă, ca să se re-randeze când planta intră/iese din
-    // zona de avertizare.
+    // zona de avertizare. Pentru valori null (senzor lipsă) folosim marcaj
+    // special "MISS" — afişat ca badge, nu ca text formatat.
     const values = SENSOR_ROWS.map((r) => {
       const v = sensors[r.key];
-      return (v == null || Number.isNaN(v)) ? '—' : Number(v).toFixed(r.dec);
+      if (v == null || Number.isNaN(v)) return 'MISS';
+      return Number(v).toFixed(r.dec);
     });
     const alertKey = luxAlert ? luxAlert.kind + ':' + luxAlert.message : 'ok';
     const snap = values.join('|') + '#' + alertKey;
@@ -666,8 +668,11 @@
       const dd = document.createElement('dd');
       dd.className = 'sensor-list__value';
 
+      const isMissing = values[i] === 'MISS';
+
       // Alertă (doar pe rândul Lumină) — triunghi cu tooltip pe hover.
-      if (r.key === 'lux' && luxAlert) {
+      // Nu apare pe valoare lipsă (n-ar avea sens — nu ştim cât e lux).
+      if (r.key === 'lux' && luxAlert && !isMissing) {
         dd.classList.add('sensor-list__value--alert');
         const alertWrap = document.createElement('span');
         alertWrap.className = 'sensor-list__alert';
@@ -681,14 +686,22 @@
         dd.appendChild(alertWrap);
       }
 
-      const val = document.createElement('span');
-      val.className = 'sensor-list__num';
-      val.textContent = values[i];
-      const unit = document.createElement('span');
-      unit.className = 'sensor-list__unit';
-      unit.textContent = r.unit;
-      dd.appendChild(val);
-      dd.appendChild(unit);
+      if (isMissing) {
+        // Badge "Lipseşte" în locul valorii — fără unitate.
+        const badge = document.createElement('span');
+        badge.className = 'sensor-list__missing';
+        badge.textContent = 'Lipseşte';
+        dd.appendChild(badge);
+      } else {
+        const val = document.createElement('span');
+        val.className = 'sensor-list__num';
+        val.textContent = values[i];
+        const unit = document.createElement('span');
+        unit.className = 'sensor-list__unit';
+        unit.textContent = r.unit;
+        dd.appendChild(val);
+        dd.appendChild(unit);
+      }
 
       dl.appendChild(dt);
       dl.appendChild(dd);

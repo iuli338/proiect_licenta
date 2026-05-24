@@ -49,12 +49,16 @@ def _mock_sensors(node_name: str) -> dict:
     """
     # Sămânţă deterministă din numele nodului — valori stabile per port.
     seed = sum(ord(c) for c in node_name)
+    # În mock, P3 are senzorul de luminozitate "lipsă" — ca să vedem badge-ul
+    # "Lipseşte" în UI fără hardware real. Pe live, hub-ul trimite null când
+    # NAN-ul de la nod indică senzor absent (vezi esp32_node_v4.ino).
+    lux_value = None if node_name == "P3" else round(120.0 + (seed * 13 % 1880))
     return {
         "soil_moisture_pct":  round(35.0 + (seed * 7  % 41), 1),  # 35–75 %
         "soil_temp_c":        round(19.0 + (seed * 3  % 5),  1),  # 19–24 °C
         "air_temp_c":         round(20.0 + (seed * 11 % 6),  1),  # 20–26 °C
         "air_humidity_pct":   round(42.0 + (seed * 5  % 22), 1),  # 42–64 %
-        "lux":                round(120.0 + (seed * 13 % 1880)),  # 120–2000 lx
+        "lux":                lux_value,                          # 120–2000 lx sau None pe P3
     }
 
 
