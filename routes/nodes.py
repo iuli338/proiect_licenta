@@ -36,11 +36,38 @@ def api_catalog():
 @bp.route("/api/node/<node_name>", methods=["GET"])
 @login_required
 def api_node_get(node_name):
-    """Returnează configuraţia salvată pentru un nod (sau {} dacă lipseşte)."""
+    """
+    Returnează configuraţia unui nod.
+
+    În MOD MOCK: citim din state.json local (sursa de adevăr pentru rulare
+    fără hardware).
+    În MOD REAL: facem proxy GET /node/Pi/config la hub — sursa unică e
+    EEPROM-ul fizic, nu o copie locală.
+    """
     if node_name not in VALID_NODE_NAMES:
         return jsonify({"error": "nod invalid"}), 400
+
+    if nc.get_hub_mode() == "mock":
+        state = load_state()
+        return jsonify(state["nodes"].get(node_name, {}))
+
+    # Mod real — fetch direct de la hub.
     state = load_state()
-    return jsonify(state["nodes"].get(node_name, {}))
+    hub_ip = state["hub"].get("ip")
+    if not hub_ip:
+        return jsonify({"error": "hub_ip_not_set"}), 503
+    try:
+        import requests
+        r = requests.get(
+            f"http://{hub_ip}/node/{node_name}/config",
+            headers={"X-Access-Code": auth.current_code() or ""},
+            timeout=4,
+        )
+        if r.status_code != 200:
+            return jsonify({"error": f"hub a raspuns {r.status_code}"}), 502
+        return jsonify(r.json())
+    except Exception as e:   # noqa: BLE001
+        return jsonify({"error": str(e)}), 502
 
 
 @bp.route("/api/node/<node_name>/stats", methods=["GET"])
@@ -48,18 +75,53 @@ def api_node_get(node_name):
 def api_node_stats(node_name):
     """
     Statisticile unui nod (data configurării, total udări, ml etc.).
-    În mod test sunt simulate; în live vin din EEPROM-ul nodului, prin hub.
+
+    MOCK: citim configul din state.json, generăm stats simulate stabile.
+    LIVE: GET /node/<P>/config + GET /node/<P>/stats pe hub, ambele cu
+    X-Access-Code. Configurul + stats sunt în EEPROM-ul hub-ului.
     """
     if node_name not in VALID_NODE_NAMES:
         return jsonify({"error": "nod invalid"}), 400
 
-    state = load_state()
-    cfg = state["nodes"].get(node_name)
-    stats = nc.get_node_stats(node_name, cfg, state["hub"].get("ip"))
-    if stats is None:
-        return jsonify({"error": "node_not_configured"}), 404
+    if nc.get_hub_mode() == "mock":
+        state = load_state()
+        cfg = state["nodes"].get(node_name)
+        stats = nc.get_node_stats(node_name, cfg, state["hub"].get("ip"))
+        if stats is None:
+            return jsonify({"error": "node_not_configured"}), 404
+        return jsonify({"node": node_name, "config": cfg, "stats": stats})
 
-    return jsonify({"node": node_name, "config": cfg, "stats": stats})
+    # --- LIVE ---
+    state = load_state()
+    hub_ip = state["hub"].get("ip")
+    if not hub_ip:
+        return jsonify({"error": "hub_ip_not_set"}), 503
+    headers = {"X-Access-Code": auth.current_code() or ""}
+    try:
+        import requests
+        # 1. config — vrem să ştim dacă nodul e configurat şi ce plantă/sol.
+        rc = requests.get(
+            f"http://{hub_ip}/node/{node_name}/config",
+            headers=headers, timeout=4,
+        )
+        if rc.status_code != 200:
+            return jsonify({"error": f"hub a raspuns {rc.status_code} la /config"}), 502
+        cfg = rc.json()
+        if not cfg.get("configured"):
+            return jsonify({"error": "node_not_configured"}), 404
+
+        # 2. stats — counters reali din EEPROM (creat la, total udări, etc.).
+        rs = requests.get(
+            f"http://{hub_ip}/node/{node_name}/stats",
+            headers=headers, timeout=4,
+        )
+        if rs.status_code != 200:
+            return jsonify({"error": f"hub a raspuns {rs.status_code} la /stats"}), 502
+        stats = rs.json()
+        stats["mock"] = False
+        return jsonify({"node": node_name, "config": cfg, "stats": stats})
+    except Exception as e:   # noqa: BLE001
+        return jsonify({"error": str(e)}), 502
 
 
 @bp.route("/api/node/<node_name>/preview", methods=["POST"])
@@ -87,8 +149,14 @@ def api_node_preview(node_name):
 @login_required
 def api_node_save(node_name):
     """
-    Validează şi salvează configuraţia unui nod, apoi porneşte trimiterea
-    ei către ESP32. Returnează un job_id de urmărit prin polling.
+    Validează şi salvează configuraţia unui nod.
+
+    În MOD MOCK: salvăm în state.json (sursa de adevăr a dashboard-ului
+    pentru rulare fără hardware) şi rulăm un job mock de trimitere.
+
+    În MOD REAL: NU mai salvăm local. Trimitem direct la hub şi întoarcem
+    job-ul. Dacă jobul eşuează, nimic nu rămâne stocat — utilizatorul
+    vede eroarea şi reîncearcă. Sursa unică de adevăr e EEPROM-ul hub-ului.
     """
     if node_name not in VALID_NODE_NAMES:
         return jsonify({"error": "nod invalid"}), 400
@@ -98,17 +166,27 @@ def api_node_save(node_name):
     if err:
         return jsonify({"error": err}), 400
 
-    # Salvăm în state.json sub numele nodului — sursa de adevăr a dashboard-ului.
     state = load_state()
-    state["nodes"][node_name] = config
-    save_state(state)
+    if nc.get_hub_mode() == "mock":
+        # Doar pe mock — salvăm local ca să avem ce afişa la următorul fetch.
+        state["nodes"][node_name] = config
+        save_state(state)
 
-    # Pornim trimiterea către ESP32 (mock sau real).
-    # Codul de acces din cookie-ul curent ajunge la hub ca X-Access-Code.
+    # Pornim trimiterea către ESP32 (mock sau real). Codul de acces din
+    # cookie-ul curent ajunge la hub ca X-Access-Code.
     job = nc.start_config_send(
         node_name, config,
         state["hub"].get("ip"),
         access_code=auth.current_code())
+
+    # Invalidăm cache-ul de config — următorul polling de status va
+    # face fetch fresh ca să reflecte valorile noi imediat.
+    try:
+        from routes.hub import invalidate_node_cfg_cache
+        invalidate_node_cfg_cache(node_name)
+    except Exception:   # noqa: BLE001
+        pass
+
     return jsonify({"ok": True, "node": node_name, "config": config,
                     "job": job.to_dict()})
 
@@ -135,6 +213,10 @@ def api_node_history(node_name):
         return jsonify({"error": "nod invalid"}), 400
 
     if nc.get_hub_mode() == "mock":
+        # Delay artificial — simulează latenţa fetch-ului de la hub real
+        # (ESP-NOW + EEPROM read). Suficient ca loader-ul să fie vizibil.
+        import time as _t
+        _t.sleep(0.5)
         return jsonify(_mock_history(node_name))
 
     # Mod real — proxy către hub.

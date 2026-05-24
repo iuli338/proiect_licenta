@@ -1218,12 +1218,141 @@
 }
 
 
+/* ---------- 12a. Loader / eroare pentru pagina Statistici ---------- */
+
+.stats-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  margin-top: var(--space-4);
+}
+
+.stats-loader .btn-spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+  color: var(--color-mint);
+}
+
+.stats-error {
+  margin-top: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-color: rgba(239, 100, 100, 0.40);
+  background: rgba(239, 100, 100, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stats-error__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: #ff8a8a;
+}
+
+.stats-error__msg {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+
+/* ---------- 12b. Loader / eroare pentru reconfigurare ---------- */
+/* Folosite în tab-ul Noduri când deschidem wizardul de reconfigurare:
+   aşteptăm configul de la hub (pe live, fetch real prin EEPROM). */
+
+.reconfig-loader,
+.reconfig-error {
+  margin-top: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+}
+
+.reconfig-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.reconfig-loader .btn-spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+  color: var(--color-mint);
+}
+
+.reconfig-loader strong {
+  color: var(--color-text);
+}
+
+.reconfig-error {
+  border-color: rgba(239, 100, 100, 0.40);
+  background: rgba(239, 100, 100, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.reconfig-error__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  color: #ff8a8a;
+}
+
+.reconfig-error__msg {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.reconfig-error button {
+  margin-top: var(--space-2);
+}
+
+
 /* ---------- 13. Pagina Grafic (în tab Monitor) ---------- */
 
 #node-graph {
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+/* Card orizontal de loading — afişat în locul graficelor cât timp
+   aşteptăm Chart.js + datele de la hub. Foloseşte stilul standard
+   `.panel` (rounded borders), conţinut centrat orizontal. */
+.graph-loader-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+}
+
+.graph-loader-card .btn-spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+  color: var(--color-mint);
+}
+
+.graph-loader-card__text {
+  font-family: var(--font-body);
 }
 
 /* Header — titlu stânga, buton "Descarcă CSV" dreapta. Pe ecrane înguste,

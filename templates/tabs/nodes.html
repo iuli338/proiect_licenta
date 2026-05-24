@@ -192,7 +192,22 @@
           Statistici · <strong id="stats-node-name">—</strong>
         </p>
 
-        <div class="panel">
+        {# Loader card afişat cât aşteptăm datele de la hub. #}
+        <div id="stats-loader" class="panel stats-loader" hidden>
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="stats-loader__text">
+            Se citesc statisticile din EEPROM-ul hub-ului…
+          </span>
+        </div>
+
+        {# Card de eroare — afişat dacă hub-ul nu răspunde sau întoarce 502. #}
+        <div id="stats-error" class="panel stats-error" hidden>
+          <p class="stats-error__title">Statisticile nu sunt disponibile</p>
+          <p class="stats-error__msg"></p>
+        </div>
+
+        {# Containerul cu datele reale. #}
+        <div id="stats-content" class="panel" hidden>
           <h2 class="panel__title" id="stats-plant">—</h2>
           <p class="panel__subtitle" id="stats-soil">—</p>
           <dl id="stats-list" class="stats-list"></dl>

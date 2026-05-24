@@ -28,15 +28,36 @@
     nodes.setNodesHash(nodeName + '/configure');
   };
 
-  /** Deschide wizardul pentru RECONFIGURARE — pre-completat, navigare liberă. */
+  /** Deschide wizardul pentru RECONFIGURARE — pre-completat, navigare liberă.
+      Pe live, configul vine fresh de la hub (EEPROM); afişăm un loader card
+      cât aşteptăm fetch-ul. */
   nodes.openWizardForReconfigure = async function (nodeName) {
     if (window.Dropwise.activateTab) window.Dropwise.activateTab('nodes');
+    nodes.setNodesHash(nodeName + '/reconfigure');
+
+    // Afişăm loader card ascunzând grila/antetul; wizardul real apare
+    // după ce avem configul.
+    showReconfigLoader(nodeName);
+
     let cfg = {};
+    let fetchError = null;
     try {
       cfg = await getJSON('/api/node/' + encodeURIComponent(nodeName));
     } catch (e) {
+      fetchError = e;
       cfg = {};
     }
+
+    hideReconfigLoader();
+
+    if (fetchError) {
+      // Pe live, dacă hub-ul nu răspunde, nu avem ce să afişăm — wizardul
+      // de reconfigurare are nevoie de date reale. Arătăm o eroare şi
+      // închidem wizardul.
+      showReconfigError(nodeName, fetchError.message);
+      return;
+    }
+
     wiz.node = nodeName;
     wiz.plant = cfg.plant || null;
     wiz.soil = cfg.soil || null;
@@ -44,8 +65,66 @@
     wiz.edit = true;
     showWizard(nodeName, 'Reconfigurare');
     setWizardStep('plant');
-    nodes.setNodesHash(nodeName + '/reconfigure');
   };
+
+  /** Card de loading afişat cât aşteptăm configul de la hub. */
+  function showReconfigLoader(nodeName) {
+    const el = nodes.el;
+    hide(el.wizard);
+    hide(el.nodeStats);
+    hide(el.nodeParams);
+    show(el.nodesHeader);
+    show(el.nodesGrid);
+
+    let loader = document.getElementById('reconfig-loader');
+    if (!loader) {
+      loader = document.createElement('div');
+      loader.id = 'reconfig-loader';
+      loader.className = 'panel reconfig-loader';
+      loader.innerHTML =
+        '<span class="btn-spinner" aria-hidden="true"></span>' +
+        '<span class="reconfig-loader__text">' +
+        'Se încarcă configurarea pentru <strong></strong> de la hub…</span>';
+      el.nodesGrid.parentNode.insertBefore(loader, el.nodesGrid);
+    }
+    loader.querySelector('strong').textContent = nodeName;
+    loader.hidden = false;
+    hide(el.nodesGrid);
+  }
+
+  function hideReconfigLoader() {
+    const loader = document.getElementById('reconfig-loader');
+    if (loader) loader.hidden = true;
+    show(nodes.el.nodesGrid);
+  }
+
+  function showReconfigError(nodeName, message) {
+    const el = nodes.el;
+    let err = document.getElementById('reconfig-error');
+    if (!err) {
+      err = document.createElement('div');
+      err.id = 'reconfig-error';
+      err.className = 'panel reconfig-error';
+      err.innerHTML =
+        '<p class="reconfig-error__title">Nu am putut citi configul nodului</p>' +
+        '<p class="reconfig-error__msg"></p>' +
+        '<button type="button" class="btn btn--ghost">' +
+        '<span aria-hidden="true">←</span> Înapoi la noduri</button>';
+      err.querySelector('button').addEventListener('click', () => {
+        err.hidden = true;
+        show(el.nodesGrid);
+        if (window.location.hash !== '#nodes') {
+          history.replaceState(null, '', '#nodes');
+        }
+      });
+      el.nodesGrid.parentNode.insertBefore(err, el.nodesGrid);
+    }
+    err.querySelector('.reconfig-error__msg').textContent =
+      `Hub-ul nu a răspuns pentru ${nodeName}: ${message}. Verifică conexiunea ` +
+      `şi reîncearcă.`;
+    err.hidden = false;
+    hide(el.nodesGrid);
+  }
 
   /** Afişează wizardul: ascunde grila, construieşte paşii, setează titlul. */
   function showWizard(nodeName, titleWord) {

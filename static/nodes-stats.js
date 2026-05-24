@@ -88,6 +88,13 @@
   //  Vedere statistici
   // ============================================================
 
+  // Cache pe sesiune: dacă utilizatorul deschide aceeaşi pagină de stats
+  // de mai multe ori fără să schimbe nimic, refolosim datele primite.
+  // Invalidat la închidere ca să facem fetch fresh la următoarea deschidere
+  // (asta era cerinţa explicită: "nu mai facem alt fetch decât la următoarea
+  // deschidere de stats").
+  let statsCache = null;       // {node, data} sau null
+
   /** Deschide vederea de statistici a unui nod. */
   nodes.openNodeStats = async function (nodeName) {
     const el = nodes.el;
@@ -95,21 +102,51 @@
     hide(el.nodesHeader);
     hide(el.nodesGrid);
     hide(el.wizard);
+    hide(el.nodeParams);
     show(el.nodeStats);
     nodes.setNodesHash(nodeName + '/stats');
     el.statsNodeName.textContent = nodeName;
-    el.statsList.innerHTML =
-      '<p class="setup-hint">Se încarcă statisticile…</p>';
+
+    // Stare iniţială: loader vizibil, conţinut + eroare ascunse.
+    setStatsState('loading');
+
+    // Dacă avem deja în cache pentru acelaşi nod, refolosim instant.
+    if (statsCache && statsCache.node === nodeName) {
+      renderStats(statsCache.data);
+      setStatsState('content');
+      return;
+    }
 
     try {
       const j = await getJSON(
         '/api/node/' + encodeURIComponent(nodeName) + '/stats');
+      statsCache = { node: nodeName, data: j };
       renderStats(j);
+      setStatsState('content');
     } catch (e) {
-      el.statsList.innerHTML =
-        '<p class="setup-hint">Statisticile nu sunt disponibile.</p>';
+      statsCache = null;
+      showStatsError(e.message || 'Hub-ul nu a răspuns.');
     }
   };
+
+  /** Comută între stările loader / content / error. */
+  function setStatsState(state) {
+    const loader  = document.getElementById('stats-loader');
+    const content = document.getElementById('stats-content');
+    const errBox  = document.getElementById('stats-error');
+    if (loader)  loader.hidden  = state !== 'loading';
+    if (content) content.hidden = state !== 'content';
+    if (errBox)  errBox.hidden  = state !== 'error';
+  }
+
+  function showStatsError(message) {
+    const errBox = document.getElementById('stats-error');
+    if (errBox) {
+      errBox.querySelector('.stats-error__msg').textContent =
+        'Detalii: ' + message;
+    }
+    setStatsState('error');
+  }
 
   /** Închide vederea de statistici (apel din butonul "Înapoi"). Înlocuieşte
       hash-ul cu #nodes (replaceState) — revine mereu la lista de carduri. */
@@ -126,6 +163,8 @@
     hide(el.nodeStats);
     show(el.nodesHeader);
     show(el.nodesGrid);
+    // Invalidăm cache-ul — următoarea deschidere face fetch fresh.
+    statsCache = null;
     nodes.pollNodesGrid();
   }
   nodes.doCloseNodeStats = doCloseNodeStats;
