@@ -361,6 +361,61 @@
     setStep('scan');
   }
 
+  // ---------- "Deconectează şi uită" ----------
+  //
+  // Trimite POST /api/hub/forget care: (1) face proxy la hub /reset pentru
+  // a şterge credenţialele NVS şi a reboota în mod provisioning; (2) curăţă
+  // local state["hub"]["ip"], ssid, provisioned. La succes, revenim la
+  // pasul "scan" — ca după o reconfigurare manuală.
+
+  /** Deschide dialogul de confirmare „Deconectează şi uită". */
+  function openForgetDialog() {
+    const dlg = el.forgetDialog;
+    if (!dlg) return;
+    // Resetează butonul (în caz că a rămas într-o stare anterioară).
+    const btn = dlg.querySelector('[data-action="forget-confirm"]');
+    btn.disabled = false;
+    btn.classList.remove('btn--loading');
+    btn.innerHTML = '<span class="btn__label">Deconectează</span>';
+    if (typeof dlg.showModal === 'function') {
+      dlg.showModal();
+    }
+  }
+
+  /** Confirmă deconectarea — trimite POST la backend. */
+  async function performForget() {
+    const dlg = el.forgetDialog;
+    const btn = dlg.querySelector('[data-action="forget-confirm"]');
+    btn.disabled = true;
+    btn.classList.add('btn--loading');
+    btn.innerHTML =
+      '<span class="btn-spinner" aria-hidden="true"></span>' +
+      '<span>Se deconectează…</span>';
+
+    try {
+      const r = await fetch('/api/hub/forget', { method: 'POST' });
+      const j = await readJSON(r);
+      if (!r.ok) {
+        throw new Error(j.error || ('HTTP ' + r.status));
+      }
+      dlg.close();
+      // După succes: cardul „conectat" dispare, revenim la scanare.
+      // Marcăm flow-ul ca neprovisioned ca să nu redirecţioneze altcineva
+      // la /dashboard să apară din nou cardul conectat.
+      el.flow.dataset.provisioned = 'false';
+      el.connectedIp.textContent = '—';
+      el.connectedSsid.textContent = '—';
+      // Reblochează taburile (Monitor / Noduri / Control / Setări).
+      if (window.Dropwise && window.Dropwise.lockTabs) {
+        window.Dropwise.lockTabs();
+      }
+      reconfigure();
+    } catch (e) {
+      dlg.close();
+      showError('Deconectare eşuată: ' + (e.message || e));
+    }
+  }
+
   // ---------- Init ----------
 
   function init() {
@@ -383,6 +438,8 @@
       doneMsg: document.getElementById('done-msg'),
       btnConnect: document.getElementById('btn-connect'),
       btnReconfigure: document.getElementById('btn-reconfigure'),
+      btnForget: document.getElementById('btn-forget'),
+      forgetDialog: document.getElementById('forget-hub-dialog'),
       connectedIp: document.getElementById('connected-ip'),
       connectedSsid: document.getElementById('connected-ssid'),
       error: document.getElementById('setup-error'),
@@ -394,6 +451,17 @@
     el.form.addEventListener('submit', submitProvision);
     el.btnConnect.addEventListener('click', confirmConnect);
     el.btnReconfigure.addEventListener('click', reconfigure);
+    if (el.btnForget) {
+      el.btnForget.addEventListener('click', openForgetDialog);
+    }
+    if (el.forgetDialog) {
+      el.forgetDialog
+        .querySelector('[data-action="forget-cancel"]')
+        .addEventListener('click', () => el.forgetDialog.close());
+      el.forgetDialog
+        .querySelector('[data-action="forget-confirm"]')
+        .addEventListener('click', performForget);
+    }
 
     // Dacă hub-ul e deja configurat (revenire pe pagină), tab-ul afişează
     // direct cardul de stare "conectat". Valorile IP/SSID sunt deja

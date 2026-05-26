@@ -108,10 +108,19 @@
     refreshTabLock();
   }
 
+  /** Marchează hub-ul ca NEprovizionat (după "Deconectează şi uită"). */
+  function markUnprovisioned() {
+    const tabs = document.querySelector('.tabs');
+    if (tabs) tabs.dataset.provisioned = 'false';
+    refreshTabLock();
+  }
+
   window.Dropwise = window.Dropwise || {};
   window.Dropwise.activateTab = activateTab;
   // markProvisioned — apelat de setup.js după "Conectare".
   window.Dropwise.unlockTabs = markProvisioned;
+  // markUnprovisioned — apelat de setup.js după "Deconectează şi uită".
+  window.Dropwise.lockTabs = markUnprovisioned;
   // refreshTabLock — apelat de auth.js după ce codul a fost validat.
   window.Dropwise.refreshTabLock = refreshTabLock;
 

@@ -161,12 +161,47 @@
               </svg>
               <span>Reconfigurează</span>
             </button>
+            <button type="button" id="btn-forget" class="btn btn--ghost btn--danger">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="16" height="16">
+                <path d="M3 6 h18"/>
+                <path d="M19 6 v14 a2 2 0 0 1 -2 2 H7 a2 2 0 0 1 -2 -2 V6"/>
+                <path d="M8 6 V4 a2 2 0 0 1 2 -2 h4 a2 2 0 0 1 2 2 v2"/>
+              </svg>
+              <span>Deconectează şi uită</span>
+            </button>
           </div>
           <p class="setup-hint">
             Reconfigurarea reia detecţia Bluetooth pentru a conecta hub-ul
-            la o altă reţea.
+            la o altă reţea. „Deconectează şi uită" şterge credenţialele
+            WiFi de pe hub şi îl readuce în mod provisioning.
           </p>
         </div>
+
+        {# Dialog de confirmare pentru "Deconectează şi uită". Acelaşi
+           pattern ca dialogul de resetare nod din nodes-grid.js. #}
+        <dialog id="forget-hub-dialog" class="reset-dialog">
+          <form method="dialog" class="reset-dialog__form">
+            <h2 class="reset-dialog__title">Deconectează şi uită hub-ul</h2>
+            <p class="reset-dialog__lead">
+              Hub-ul va fi rebootat în <strong>mod provisioning</strong>:
+              credenţialele WiFi salvate vor fi şterse, iar dashboard-ul îşi
+              va pierde legătura cu el.
+            </p>
+            <p class="reset-dialog__warn">
+              Această operaţie este <strong>ireversibilă</strong>. După
+              deconectare va trebui să refaci provisioning-ul Bluetooth
+              ca la prima configurare.
+            </p>
+            <div class="reset-dialog__actions">
+              <button type="button" class="btn btn--ghost"
+                      data-action="forget-cancel">Anulează</button>
+              <button type="button" class="btn btn--primary reset-dialog__confirm"
+                      data-action="forget-confirm">
+                <span class="btn__label">Deconectează</span>
+              </button>
+            </div>
+          </form>
+        </dialog>
 
         {# Mesaj de eroare — vizibil doar la eşec, în orice pas #}
         <div id="setup-error" class="setup-error" role="alert" hidden>

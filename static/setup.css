@@ -457,11 +457,27 @@
 
 .hub-status-card__actions {
   margin-top: var(--space-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 /* Butonul "Reconfigurează" — ghost cu iconiţă mică */
-#btn-reconfigure svg {
+#btn-reconfigure svg,
+#btn-forget svg {
   flex-shrink: 0;
+}
+
+/* Variantă „danger" — accent roşu pe varianta ghost. Folosită de
+   „Deconectează şi uită" ca semnal vizual că e o acţiune ireversibilă. */
+.btn--danger {
+  color: #ffb4b4;
+  border-color: rgba(239, 100, 100, 0.45);
+}
+.btn--danger:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(239, 100, 100, 0.18);
+  border-color: rgba(239, 100, 100, 0.65);
 }
 
 /* ---------- 8. Taburi blocate până la prima conectare ---------- */
