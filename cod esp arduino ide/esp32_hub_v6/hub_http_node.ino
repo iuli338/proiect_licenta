@@ -190,6 +190,9 @@ static String buildNodeJson(const char* nodeName, const NodeConfig& cfg,
   json += ",\"T_min_min\":";        json += rp.tMinMin;
   json += ",\"target_dose_ml\":";   json += rp.targetDoseMl;
   json += ",\"safety_max_min\":";   json += rp.safetyMaxMin;
+  // NOU (LAYOUT_VERSION 6) — flag udare automată:
+  json += ",\"auto_watering_enabled\":";
+  json += (rp.autoWateringEnabled ? "true" : "false");
   json += "}";
 
   // stats
@@ -317,6 +320,10 @@ void handleNodePost() {
   // Clasa de udare vine ca string în JSON ("rar", "echilibrat" etc.).
   // Mapăm la enum 0..4. Lipsă → păstrăm valoarea curentă din EEPROM.
   rp.wateringClass = parseWateringClass(body, rp.wateringClass);
+  // NOU LAYOUT 6: flag auto-watering. La prima configurare e false
+  // (planta tocmai a fost setată — utilizatorul trebuie să activeze explicit).
+  // Lipsă → 0 (default sigur la configurare nouă).
+  rp.autoWateringEnabled = (uint8_t)jsonNum(body, "auto_watering_enabled", 0);
 
   // --- created_at: o singura data, la prima configurare ---
   uint32_t now = (uint32_t)(time(nullptr));   // 0 daca NTP nu e configurat
@@ -358,6 +365,70 @@ void handleNodePost() {
 
   // Întoarcem starea finală — ca client-ul să poată confirma valorile.
   server.send(200, "application/json", buildNodeJson(nodeName, cfg, rp, st));
+}
+
+// POST /node/<P>/auto-watering — toggle udare automată.
+// Body: {"enabled": true|false}
+// Modifică DOAR flag-ul autoWateringEnabled din RegParams; restul rămâne.
+void handleNodeAutoWatering() {
+  if (!checkAccessCode()) return;
+  sendCorsHeaders();
+
+  char nodeName[NAME_LEN];
+  if (!parseNodeNameFromUri(server.uri(), nodeName, sizeof(nodeName))) {
+    server.send(400, "application/json", "{\"error\":\"invalid node name\"}");
+    return;
+  }
+
+  String body = server.hasArg("plain") ? server.arg("plain") : "";
+  if (body.indexOf("\"enabled\"") < 0) {
+    server.send(400, "application/json",
+                "{\"error\":\"missing 'enabled' field\"}");
+    return;
+  }
+  // Acceptăm "true"/"false" sau 1/0 — folosim helper-ul jsonNum cu
+  // sentinel -1, apoi convertim. Trick: pentru "true" /"false" nu merge
+  // toDouble(), deci căutăm cuvinte literale.
+  bool enabled = false;
+  if (body.indexOf("true")  >= 0) enabled = true;
+  else if (body.indexOf("false") >= 0) enabled = false;
+  else enabled = (jsonNum(body, "enabled", 0) != 0);
+
+  NodeConfig cfg; RegParams rp; NodeStats st;
+  storageLoadConfig(nodeName, cfg);
+  storageLoadParams(nodeName, rp);
+  storageLoadStats(nodeName,  st);
+
+  if (!cfg.configured) {
+    server.send(400, "application/json",
+                "{\"error\":\"node not configured\"}");
+    return;
+  }
+
+  rp.autoWateringEnabled = enabled ? 1 : 0;
+
+  i2cBusyDepth++;
+  bool ok = storageSaveParams(nodeName, rp);
+  if (!ok) { delay(100); ok = storageSaveParams(nodeName, rp); }
+  i2cBusyDepth--;
+
+  if (!ok) {
+    server.send(500, "application/json",
+                "{\"error\":\"eeprom write failed\"}");
+    return;
+  }
+
+  Serial.print("Node ");
+  Serial.print(nodeName);
+  Serial.print(" auto-watering = ");
+  Serial.println(enabled ? "ON" : "OFF");
+
+  String resp = "{\"ok\":true,\"node\":\"";
+  resp += nodeName;
+  resp += "\",\"enabled\":";
+  resp += (enabled ? "true" : "false");
+  resp += "}";
+  server.send(200, "application/json", resp);
 }
 
 void handleNodeForget() {

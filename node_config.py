@@ -266,6 +266,9 @@ def derive_regulator(water_need: str, retention: str,
         "T_min_min": T_min_min,
         "target_dose_ml": target_dose_ml,
         "safety_max_min": safety_max_min,
+        # Udare automată — OFF la prima configurare. Utilizatorul activează
+        # explicit prin UI după ce verifică parametrii.
+        "auto_watering_enabled": False,
         # --- alias-uri folosite în UI + firmware (acelaşi sens cu noile câmpuri) ---
         "min_interval_min": T_min_min,
         "dose_estimat_ml": target_dose_ml,
@@ -273,6 +276,116 @@ def derive_regulator(water_need: str, retention: str,
         "target_moisture": setpoint,
         "dose_ml": target_dose_ml,
         "check_interval_min": T_min_min,
+    }
+
+
+def set_auto_watering(config: dict, enabled: bool) -> dict:
+    """Setează flag-ul de udare automată într-un config de nod existent.
+
+    Modifică obiectul în loc + îl întoarce. Folosit de endpoint-ul
+    POST /api/node/<P>/auto-watering.
+    """
+    reg = config.setdefault("regulator", {})
+    reg["auto_watering_enabled"] = bool(enabled)
+    return config
+
+
+def predict_next_watering(reg: dict, soil_moisture_pct: float,
+                          minutes_since_last: float) -> Optional[dict]:
+    """Estimează momentul + doza pentru următoarea udare.
+
+    Identic algoritmic cu logica regulatorului din firmware (vezi
+    misc/decizie_udare_diagrama.svg). Se ia minimul dintre:
+      - timpul până umiditatea cade sub (setpoint - histerezis) — modelul
+        exponenţial h(t) = h_curent · e^(-t/τ)
+      - timpul rămas până la T_min (cadenţa biologică)
+    şi se limitează sus de safety_max (override siguranţă).
+
+    Args:
+      reg: dict-ul de regulator (cum vine din derive_regulator).
+      soil_moisture_pct: umiditatea curentă măsurată (%). NaN/None → None.
+      minutes_since_last: minute de la ultima udare. 0 sau negativ → 0.
+
+    Returnează:
+      None — dacă nu putem prezice (date lipsă / umiditatea deja peste prag
+             şi T_min nu s-a atins).
+      {
+        "minutes_until": int   — minute până la udarea estimată
+        "estimated_dose_ml": int — doza estimată la momentul udării
+        "reason": "prag" | "cadenta" | "safety"
+      }
+    """
+    if soil_moisture_pct is None:
+        return None
+    try:
+        h = float(soil_moisture_pct)
+    except (TypeError, ValueError):
+        return None
+    if math.isnan(h) or math.isinf(h):
+        return None
+
+    dt = max(0.0, float(minutes_since_last or 0))
+
+    setpoint     = float(reg.get("setpoint", 50))
+    histerezis   = float(reg.get("hysteresis", _HISTEREZIS))
+    T_min_min    = float(reg.get("T_min_min", reg.get("min_interval_min", 24*60)))
+    safety_max   = float(reg.get("safety_max_min", T_min_min * _SAFETY_MAX_FACTOR))
+    target_dose  = float(reg.get("target_dose_ml", reg.get("dose_estimat_ml", 30)))
+    Kp           = float(reg.get("Kp", 0.7))
+
+    model = reg.get("model", {})
+    tau_h = float(model.get("tau_h", _TAU_REF_H))
+
+    # 1. Timp până sub prag (h cade sub setpoint - histerezis prin uscare).
+    prag = setpoint - histerezis
+    if h <= prag:
+        t_prag_min = 0.0   # deja sub prag
+    elif h <= 0.5 or prag <= 0.0:
+        t_prag_min = float("inf")   # imposibil de calculat
+    else:
+        # h(t) = h · exp(-t/τ_h) [τ în ore]
+        # t = τ · ln(h/prag)  [ore]
+        t_prag_min = tau_h * math.log(h / prag) * 60.0
+
+    # 2. Timp până la T_min de la ultima udare.
+    t_cadenta_min = max(0.0, T_min_min - dt)
+
+    # 3. Safety max — override-uieşte tot.
+    t_safety_min = max(0.0, safety_max - dt)
+
+    # Decizia: trebuie să fie ÎN AFARA pragului (h sub setpoint - hist) ŞI
+    # peste T_min. Deci aşteptăm până la MAX(t_prag, t_cadenta), dar nu
+    # mai mult de t_safety.
+    t_principal = max(t_prag_min, t_cadenta_min)
+
+    if t_safety_min <= t_principal and t_safety_min < float("inf"):
+        # Safety_max va interveni înainte ca celelalte condiţii să fie ok.
+        minutes_until = t_safety_min
+        reason = "safety"
+    else:
+        minutes_until = t_principal
+        # Stabilim motivul predominant.
+        if t_cadenta_min > t_prag_min:
+            reason = "cadenta"
+        else:
+            reason = "prag"
+
+    if minutes_until == float("inf"):
+        return None
+
+    # Estimarea dozei: la momentul udării, eroarea va fi h_at_udare faţă de
+    # setpoint. Pentru simplitate folosim umiditatea la momentul atingerii
+    # pragului ≈ prag, deci eroarea ≈ histerezis. PI livrează:
+    # doza = max(Kp · histerezis, target_dose_ml), clamp.
+    e_estim = histerezis
+    doza_pi = Kp * e_estim
+    estimated_dose = max(doza_pi, target_dose)
+    estimated_dose = max(5, min(200, int(round(estimated_dose))))
+
+    return {
+        "minutes_until": int(round(minutes_until)),
+        "estimated_dose_ml": estimated_dose,
+        "reason": reason,
     }
 
 

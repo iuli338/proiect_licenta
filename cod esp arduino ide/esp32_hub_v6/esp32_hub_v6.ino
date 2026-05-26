@@ -120,7 +120,7 @@
 // iniţializăm. La schimbarea layout-ului incrementăm versiunea.
 
 #define EEPROM_MAGIC              "DROPv01"   // 8 B (cu \0)
-#define EEPROM_LAYOUT_VERSION     5   // bump => re-init la urmatorul boot
+#define EEPROM_LAYOUT_VERSION     6   // bump => re-init la urmatorul boot
 
 #define EEPROM_OFFSET_HEADER      0x0000      // 32 B (resv 64 B pana la slot)
 #define EEPROM_OFFSET_CONFIG_P1   0x0040      // 128 B per port
@@ -286,14 +286,17 @@ typedef struct __attribute__((packed)) {
   uint8_t  reserved[15];
 } NodeConfig;                     // 128 B
 
-// 5×float + 4×uint16 (vechi) + 3×uint16 + 1×uint8 (NOU) = 35 B
-// reserved[29] => 64 B total.
+// 5×float + 4×uint16 + 1×uint8 + 3×uint16 (LAYOUT 5) + 1×uint8 (LAYOUT 6) = 36 B
+// reserved[28] => 64 B total.
 //
-// Câmpurile NOI vin din clasa de udare (vezi node_config._WATERING_CLASSES):
+// Câmpurile din clasa de udare (vezi node_config._WATERING_CLASSES):
 //   wateringClass  — enum 0..4 (foarte_rar/rar/echilibrat/frecvent/zilnic)
 //   tMinMin        — interval minim între udări [min] (cadenţa biologică)
 //   targetDoseMl   — doza ţintă per udare [ml]
 //   safetyMaxMin   — max timp fără udare [min] (1.2× tMinMin)
+// NOU în LAYOUT 6:
+//   autoWateringEnabled — flag care permite regulatorului să acţioneze
+//                         automat pe portul respectiv. Default 0 (off).
 typedef struct __attribute__((packed)) {
   float    K;                     // %/ml — câştig proces
   float    tauH;                  // ore — constanta de uscare
@@ -304,12 +307,14 @@ typedef struct __attribute__((packed)) {
   uint16_t hysteresis10;          // hysteresis × 10
   uint16_t minIntervalMin;        // = tMinMin (păstrat ca alias legacy)
   uint16_t doseEstimatMl;         // = targetDoseMl (păstrat ca alias legacy)
-  // NOU (LAYOUT_VERSION 5):
+  // LAYOUT_VERSION 5:
   uint8_t  wateringClass;         // 0=foarte_rar 1=rar 2=echilibrat 3=frecvent 4=zilnic
   uint16_t tMinMin;               // interval minim între udări [min]
   uint16_t targetDoseMl;          // doza ţintă per udare [ml]
   uint16_t safetyMaxMin;          // max timp fără udare [min]
-  uint8_t  reserved[29];
+  // LAYOUT_VERSION 6:
+  uint8_t  autoWateringEnabled;   // 0=off, 1=on (regulator automat activ)
+  uint8_t  reserved[28];
 } RegParams;                      // 64 B
 
 // 5×uint32 + 1×uint16 + 1×uint8 = 23 B; reserved[41] => 64 B total.

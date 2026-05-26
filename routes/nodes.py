@@ -335,3 +335,63 @@ def api_node_reset(node_name):
         pass
 
     return jsonify({"ok": True, "node": node_name})
+
+
+@bp.route("/api/node/<node_name>/auto-watering", methods=["POST"])
+@login_required
+def api_node_auto_watering(node_name):
+    """
+    Activează / dezactivează udarea automată pentru un nod.
+
+    Body: {"enabled": true|false}
+
+    Mock: setează flag-ul în state.json["nodes"][node_name].
+    Live: proxy POST la firmware /node/<P>/auto-watering, apoi salvează
+          şi local pentru cache. Răspunde 200 doar dacă hub-ul a confirmat.
+    """
+    if node_name not in VALID_NODE_NAMES:
+        return jsonify({"error": "nod invalid"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    if "enabled" not in payload:
+        return jsonify({"error": "lipseste campul 'enabled'"}), 400
+    enabled = bool(payload["enabled"])
+
+    state = load_state()
+
+    # ---- LIVE: proxy spre hub ----
+    if nc.get_hub_mode() == "real":
+        hub_ip = state["hub"].get("ip")
+        if not hub_ip:
+            return jsonify({"error": "hub_ip_not_set"}), 503
+        try:
+            import requests
+            r = requests.post(
+                f"http://{hub_ip}/node/{node_name}/auto-watering",
+                json={"enabled": enabled},
+                headers={"X-Access-Code": auth.current_code() or ""},
+                timeout=5,
+            )
+        except Exception as e:   # noqa: BLE001
+            return jsonify({
+                "error": f"Hub-ul nu raspunde ({e})."
+            }), 502
+        if r.status_code != 200:
+            return jsonify({
+                "error": f"Hub-ul a refuzat ({r.status_code})."
+            }), 502
+        # Invalidăm cache-ul ca să citim configul proaspăt la următorul poll.
+        try:
+            from routes.hub import invalidate_node_cfg_cache
+            invalidate_node_cfg_cache(node_name)
+        except Exception:   # noqa: BLE001
+            pass
+        return jsonify({"ok": True, "node": node_name, "enabled": enabled})
+
+    # ---- MOCK: setăm flag-ul în state ----
+    cfg = state["nodes"].get(node_name)
+    if not cfg or not cfg.get("configured"):
+        return jsonify({"error": "Nodul nu este configurat."}), 400
+    nc.set_auto_watering(cfg, enabled)
+    save_state(state)
+    return jsonify({"ok": True, "node": node_name, "enabled": enabled})

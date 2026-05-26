@@ -304,11 +304,13 @@ void startNormalMode() {
     server.on(doseUri.c_str(), HTTP_OPTIONS, handleOptions);
   }
 
-  // /node/Pi/config + /node/Pi/stats + /node/Pi/forget — persistate în EEPROM.
+  // /node/Pi/config + /node/Pi/stats + /node/Pi/forget + /node/Pi/auto-watering
+  // — toate persistate în EEPROM.
   for (int i = 1; i <= NUM_PORTS; i++) {
     String cfgUri    = "/node/P" + String(i) + "/config";
     String statsUri  = "/node/P" + String(i) + "/stats";
     String forgetUri = "/node/P" + String(i) + "/forget";
+    String autoUri   = "/node/P" + String(i) + "/auto-watering";
     server.on(cfgUri.c_str(),    HTTP_GET,     handleNodeGet);
     server.on(cfgUri.c_str(),    HTTP_POST,    handleNodePost);
     server.on(cfgUri.c_str(),    HTTP_OPTIONS, handleOptions);
@@ -316,6 +318,8 @@ void startNormalMode() {
     server.on(statsUri.c_str(),  HTTP_OPTIONS, handleOptions);
     server.on(forgetUri.c_str(), HTTP_POST,    handleNodeForget);
     server.on(forgetUri.c_str(), HTTP_OPTIONS, handleOptions);
+    server.on(autoUri.c_str(),   HTTP_POST,    handleNodeAutoWatering);
+    server.on(autoUri.c_str(),   HTTP_OPTIONS, handleOptions);
   }
 
   server.begin();

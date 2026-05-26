@@ -11,6 +11,83 @@
   const nodes = window.Dropwise.nodes;
   const { show, hide, getJSON, canPoll } = nodes;
 
+  // ---------- Istoric noduri conectate anterior ----------
+  //
+  // Păstrăm în localStorage o "amintire" a fiecărui nod care a fost
+  // configurat şi activ. Când nodul dispare din lista activă (deconectat
+  // fizic sau forget), card-ul rămâne vizibil într-o secţiune separată
+  // marcată "Noduri conectate anterior". La reconectare, nodul iese din
+  // istoric (lista activă are prioritate).
+  //
+  // Schema în localStorage:
+  //   key   = "dropwise.nodes.history"
+  //   value = {
+  //     "P1": { name, port, config: {plant, soil, color, ...}, lastSeen }
+  //   }
+
+  const HISTORY_KEY = 'dropwise.nodes.history';
+
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      return raw ? (JSON.parse(raw) || {}) : {};
+    } catch (_) { return {}; }
+  }
+  function saveHistory(h) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch (_) {}
+  }
+
+  // Cache în RAM cu ultimul snapshot per nume nod CÂT TIMP era activ.
+  // Folosit la tranzitia activ → dispare: îl mutăm în localStorage cu
+  // configul lui ultim. Nu salvăm direct la fiecare polling în
+  // localStorage ca să nu lovim disk-ul de 10 ori/secundă.
+  const lastActiveSnapshot = {};   // { "P1": {name, port, config, lastSeen} }
+
+  /** Adăugă un snapshot pentru un nod ACTIV (configurat + confirmat). Şi
+      îl scoatem din istoric, fiindcă acum e online. */
+  function rememberActiveNode(port) {
+    if (!port.name || !port.configured || !port.config) return;
+    lastActiveSnapshot[port.name] = {
+      name: port.name,
+      port: port.port,
+      config: port.config,
+      lastSeen: Date.now(),
+    };
+    // Iese din istoric — un nod activ NU apare în "Conectate anterior".
+    const h = loadHistory();
+    if (h[port.name]) {
+      delete h[port.name];
+      saveHistory(h);
+    }
+  }
+
+  /** Mută în istoric un nod care a dispărut din lista activă. Apelat
+      pentru fiecare nume care era în lastActiveSnapshot dar nu mai
+      figurează în lista de porturi confirmate. */
+  function archiveDisappeared(activeNames) {
+    let changed = false;
+    const h = loadHistory();
+    for (const name of Object.keys(lastActiveSnapshot)) {
+      if (!activeNames.has(name)) {
+        h[name] = lastActiveSnapshot[name];
+        delete lastActiveSnapshot[name];
+        changed = true;
+      }
+    }
+    if (changed) saveHistory(h);
+  }
+
+  /** Elimină un nod din istoric — chemat de butonul "Şterge din istoric". */
+  function removeFromHistory(nodeName) {
+    const h = loadHistory();
+    if (h[nodeName]) {
+      delete h[nodeName];
+      saveHistory(h);
+      return true;
+    }
+    return false;
+  }
+
   // ---------- Polling grilă ----------
 
   // Cache diagnostic — se invalidează la pierdere de conexiune sau la
@@ -181,6 +258,21 @@
     grid.querySelectorAll('.node-card').forEach((c) => {
       if (!seen.has(c.dataset.port)) c.remove();
     });
+
+    // ---- Istoric (DOAR pe grila Noduri, nu pe Monitor) ----
+    // Memorăm/expirăm starea istoricului pe baza listei active. Apoi
+    // randăm secţiunea "Noduri conectate anterior".
+    if (grid === nodes.el.nodesGrid) {
+      const activeNames = new Set();
+      ports.forEach((p) => {
+        if (p.confirmed && p.configured && p.config) {
+          activeNames.add(p.name);
+          rememberActiveNode(p);
+        }
+      });
+      archiveDisappeared(activeNames);
+      renderHistory();
+    }
   }
   nodes.renderNodeGrid = renderNodeGrid;
 
@@ -290,6 +382,17 @@
               </svg>
               <span>Reconfigurează</span>
             </button>
+            <button type="button" class="node-card__menu-item" role="menuitem"
+                    data-action="auto-off" hidden>
+              <svg class="node-card__menu-icon" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <circle cx="12" cy="12" r="9"/>
+                <line x1="5" y1="5" x2="19" y2="19"/>
+              </svg>
+              <span>Dezactivează udare auto</span>
+            </button>
             <button type="button"
                     class="node-card__menu-item node-card__menu-item--danger"
                     role="menuitem"
@@ -315,6 +418,9 @@
       <p class="node-card__plant"></p>
       <p class="node-card__soil"></p>
       <div class="node-card__sensors"></div>
+      <div class="node-card__auto" hidden>
+        <!-- conţinut populat dinamic din updateAutoWateringBlock() -->
+      </div>
       <button type="button" class="btn btn--primary node-card__cfg"></button>
       <button type="button" class="btn btn--ghost node-card__graph" hidden>
         <svg class="node-card__graph-icon" viewBox="0 0 24 24"
@@ -384,6 +490,14 @@
         menuBtn.setAttribute('aria-expanded', 'false');
         if (card.dataset.node) nodes.confirmResetNode(card.dataset.node);
       });
+    menu.querySelector('[data-action="auto-off"]')
+      .addEventListener('click', () => {
+        menuList.hidden = true;
+        menuBtn.setAttribute('aria-expanded', 'false');
+        if (card.dataset.node) {
+          toggleAutoWatering(card.dataset.node, false);
+        }
+      });
   }
 
   /** Închide toate meniurile ⋯ deschise. */
@@ -441,13 +555,21 @@
       // Datele de senzori + butonul "Vezi grafic" — DOAR pe grila Monitor.
       const onMonitor = !!card.closest('#node-grid');
       const graphBtn = card.querySelector('.node-card__graph');
+      const autoBox = card.querySelector('.node-card__auto');
       if (!onMonitor) {
         sens.hidden = true;
         if (graphBtn) graphBtn.hidden = true;
+        if (autoBox) autoBox.hidden = true;
       } else {
         renderSensors(sens, port.sensors, port.config);
         if (graphBtn) graphBtn.hidden = false;
+        // Block "Următoarea udare" — apare doar pe Monitor pentru noduri
+        // configurate (atât ON cât şi OFF — fiecare cu UI-ul lui propriu).
+        if (autoBox) updateAutoWateringBlock(autoBox, port);
       }
+      // Vizibilitatea opţiunii "Dezactivează udare auto" în meniul ⋯
+      // se actualizează indiferent de tab (Monitor sau Noduri).
+      updateMenuAutoOption(card, port);
     } else {
       // --- Nod neconfigurat ---
       if (card.dataset.state !== 'unconfigured') {
@@ -468,6 +590,8 @@
         delete sens.dataset.filled;
         const gb3 = card.querySelector('.node-card__graph');
         if (gb3) gb3.hidden = true;
+        const auto3 = card.querySelector('.node-card__auto');
+        if (auto3) auto3.hidden = true;
         card.style.removeProperty('--node-accent');
         img.hidden = true;
         img.removeAttribute('src');
@@ -575,6 +699,148 @@
       });
     }
     if (typeof dlg.showModal === 'function' && !dlg.open) dlg.showModal();
+  }
+
+  // ---------- Auto-watering: block pe card + acţiuni ----------
+  //
+  // Pentru noduri configurate, randăm în zona dedicată informaţii despre
+  // udarea automată:
+  //   • OFF (default) → text + buton "Activează" mare
+  //   • ON            → predicţia "Următoarea udare" + ultima udare
+  //                      (dezactivarea se face DOAR din meniul ⋯)
+  // Datele de predicţie (next_watering) vin de la backend (mock sau hub).
+
+  /** Format prietenos pentru un interval de minute.
+      Ex: 240 → "4 h", 1500 → "1 zi 1 h", 30 → "30 min". */
+  function formatTimeUntil(minutes) {
+    const m = Math.max(0, Math.round(minutes));
+    if (m < 60) return m + ' min';
+    if (m < 24 * 60) {
+      const h = m / 60;
+      return (h === Math.round(h) ? h : h.toFixed(1)) + ' h';
+    }
+    const days  = Math.floor(m / (24 * 60));
+    const rem_h = Math.round((m - days * 24 * 60) / 60);
+    if (rem_h === 0 || rem_h === 24) {
+      const d = days + (rem_h === 24 ? 1 : 0);
+      return d + (d === 1 ? ' zi' : ' zile');
+    }
+    return days + (days === 1 ? ' zi ' : ' zile ') + rem_h + ' h';
+  }
+
+  /** Format pentru "acum X" — timp scurs. */
+  function formatTimeAgo(minutes) {
+    if (minutes == null || minutes < 0) return null;
+    const m = Math.round(minutes);
+    if (m < 1) return 'chiar acum';
+    if (m < 60) return 'acum ' + m + ' min';
+    if (m < 24 * 60) {
+      const h = Math.round(m / 60);
+      return 'acum ' + h + ' h';
+    }
+    const days = Math.round(m / (24 * 60));
+    return 'acum ' + days + (days === 1 ? ' zi' : ' zile');
+  }
+
+  /** Construieşte conţinutul block-ului auto-watering pe baza stării
+      curente a portului (config + next_watering + stats). */
+  function updateAutoWateringBlock(box, port) {
+    const cfg = port.config || {};
+    const reg = cfg.regulator || {};
+    const enabled = !!reg.auto_watering_enabled;
+    const next = port.next_watering;
+
+    // Snapshot pentru a evita re-render-ul când nimic nu s-a schimbat.
+    const snap = JSON.stringify({
+      en: enabled,
+      nw: next,
+      ls: port.stats && port.stats.last_watering,
+    });
+    if (box.dataset.snap === snap) return;
+    box.dataset.snap = snap;
+
+    box.hidden = false;
+
+    if (!enabled) {
+      // === OFF ===
+      box.innerHTML =
+        '<div class="node-card__auto-off">' +
+          '<p class="node-card__auto-text">' +
+            'Udarea automată este dezactivată.' +
+          '</p>' +
+          '<button type="button" class="btn btn--primary node-card__auto-on">' +
+            'Activează' +
+          '</button>' +
+        '</div>';
+      box.querySelector('.node-card__auto-on')
+        .addEventListener('click', () => toggleAutoWatering(port.name, true));
+      return;
+    }
+
+    // === ON ===
+    let html = '<div class="node-card__auto-on-box">';
+    // Următoarea udare
+    if (next && next.minutes_until != null) {
+      html += '<div class="node-card__auto-row">' +
+        '<span class="node-card__auto-label">Următoarea udare</span>' +
+        '<span class="node-card__auto-value">în ~' +
+          formatTimeUntil(next.minutes_until) +
+          (next.estimated_dose_ml
+            ? ' · ~' + next.estimated_dose_ml + ' ml'
+            : '') +
+        '</span></div>';
+    } else {
+      html += '<div class="node-card__auto-row">' +
+        '<span class="node-card__auto-label">Următoarea udare</span>' +
+        '<span class="node-card__auto-value node-card__auto-value--muted">' +
+          'predicţie indisponibilă</span></div>';
+    }
+
+    // Ultima udare — din stats dacă există
+    const stats = port.stats || {};
+    const lastEpoch = Number(stats.last_watering) || 0;
+    if (lastEpoch > 0) {
+      const nowS = Math.floor(Date.now() / 1000);
+      const agoMin = (nowS - lastEpoch) / 60;
+      const agoTxt = formatTimeAgo(agoMin) || '—';
+      const lastDose = stats.last_dose_ml || 0;
+      html += '<div class="node-card__auto-row node-card__auto-row--sub">' +
+        '<span class="node-card__auto-label">Ultima udare</span>' +
+        '<span class="node-card__auto-value">' + agoTxt +
+          (lastDose ? ' (' + lastDose + ' ml)' : '') +
+        '</span></div>';
+    }
+    html += '</div>';
+    box.innerHTML = html;
+  }
+
+  /** Apel API pentru activare/dezactivare. */
+  async function toggleAutoWatering(nodeName, enabled) {
+    try {
+      await nodes.getJSON(
+        '/api/node/' + encodeURIComponent(nodeName) + '/auto-watering',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: !!enabled }),
+        });
+      // După succes, forţăm un poll imediat ca să refacem UI-ul.
+      if (nodes.pollMonitor) nodes.pollMonitor();
+      if (nodes.pollNodesGrid) nodes.pollNodesGrid();
+    } catch (e) {
+      alert('Nu am putut schimba udarea automată: ' + (e.message || e));
+    }
+  }
+  nodes.toggleAutoWatering = toggleAutoWatering;
+
+  /** Actualizează vizibilitatea opţiunii "Dezactivează udare auto" din
+      meniul ⋯. Apare DOAR dacă auto e activ; ascunsă altfel. */
+  function updateMenuAutoOption(card, port) {
+    const item = card.querySelector('[data-action="auto-off"]');
+    if (!item) return;
+    const enabled = !!(port.config && port.config.regulator &&
+                       port.config.regulator.auto_watering_enabled);
+    item.hidden = !enabled;
   }
 
   // ---------- Senzori (afişaţi pe cardurile din tab-ul Monitor) ----------
@@ -1281,4 +1547,126 @@
       csvBtn.addEventListener('click', downloadHistoryCsv);
     }
   };
+
+  // ---------- Randare secţiune istoric ----------
+  //
+  // Apelată după renderNodeGrid (doar pe grila Noduri). Construieşte
+  // carduri "dim" cu doar informaţiile salvate în localStorage.
+
+  /** Construieşte un card simplu pentru un nod arhivat. Meniu redus la
+      doar "Şterge din istoric". */
+  function buildHistoryCard(entry) {
+    const card = document.createElement('article');
+    card.className = 'node-card node-card--history';
+    card.dataset.node = entry.name;
+    card.dataset.port = String(entry.port || '');
+
+    const cfg = entry.config || {};
+    const plant = cfg.plant || {};
+    const soil  = cfg.soil  || {};
+    const portTxt = entry.port ? ('Port ' + entry.port + '  ·  ') : '';
+
+    card.innerHTML = `
+      <div class="node-card__head">
+        <h3 class="node-card__title">${portTxt}${escapeHtml(entry.name)}</h3>
+        <div class="node-card__menu">
+          <button type="button" class="node-card__menu-btn"
+                  aria-label="Opţiuni nod" aria-haspopup="true"
+                  aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <circle cx="12" cy="5"  r="2"/>
+              <circle cx="12" cy="12" r="2"/>
+              <circle cx="12" cy="19" r="2"/>
+            </svg>
+          </button>
+          <div class="node-card__menu-list" role="menu" hidden>
+            <button type="button"
+                    class="node-card__menu-item node-card__menu-item--danger"
+                    role="menuitem" data-action="history-remove">
+              <svg class="node-card__menu-icon" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6 l -1 14 a 2 2 0 0 1 -2 2 H 8 a 2 2 0 0 1 -2 -2 L 5 6"/>
+                <path d="M10 11 v 6 M 14 11 v 6"/>
+              </svg>
+              <span>Şterge din istoric</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="node-card__media">
+        <img class="node-card__img" alt="" />
+      </div>
+      <p class="node-card__plant">${escapeHtml(plant.name || '—')}</p>
+      <p class="node-card__soil">${escapeHtml(soil.name || '')}</p>
+    `;
+
+    // Imagine plantă (poate lipsi dacă e custom).
+    const img = card.querySelector('.node-card__img');
+    if (plant.id) setPlantImage(img, plant.id, plant.name);
+    else img.hidden = true;
+
+    // Culoare card.
+    if (cfg.color) applyCardColor(card, cfg.color);
+
+    // Meniul ⋯
+    const menuBtn  = card.querySelector('.node-card__menu-btn');
+    const menuList = card.querySelector('.node-card__menu-list');
+    menuBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const open = menuList.hidden;
+      closeAllNodeMenus();
+      menuList.hidden = !open;
+      menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    // Acţiune unică: şterge nodul din istoric şi reîmprospătează grila.
+    card.querySelector('[data-action="history-remove"]')
+      .addEventListener('click', () => {
+        menuList.hidden = true;
+        menuBtn.setAttribute('aria-expanded', 'false');
+        if (removeFromHistory(entry.name)) {
+          renderHistory();
+        }
+      });
+
+    return card;
+  }
+
+  function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  /** Re-randează secţiunea "Noduri conectate anterior" pe baza
+      localStorage-ului. Apelată după fiecare renderNodeGrid pe grila
+      Noduri + manual din butonul de ştergere. */
+  function renderHistory() {
+    const section = nodes.el.nodesHistorySection;
+    const grid = nodes.el.nodesHistoryGrid;
+    if (!section || !grid) return;
+
+    const h = loadHistory();
+    const entries = Object.values(h).sort(
+      (a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+
+    if (entries.length === 0) {
+      section.hidden = true;
+      grid.innerHTML = '';
+      return;
+    }
+
+    section.hidden = false;
+    // Re-randăm de la zero — istoricul nu se schimbă des, nu merită
+    // diffing in-place.
+    grid.innerHTML = '';
+    for (const entry of entries) {
+      grid.appendChild(buildHistoryCard(entry));
+    }
+  }
+  nodes.renderNodesHistory = renderHistory;
 })();

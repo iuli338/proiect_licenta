@@ -13,6 +13,74 @@ static String jsonFloat(float v, int decimals) {
   return String(buf);
 }
 
+// Predictie "Următoarea udare" — identic algoritmic cu Python
+// node_config.predict_next_watering. Întoarce true + populează out_* dacă
+// putem prezice, false altfel.
+//
+// Logica:
+//   t_prag    = τ · ln(h / (setpoint - histerezis))    [ore → min]
+//   t_cadenta = T_min - dt_ultima_udare                 [min]
+//   t_safety  = safety_max - dt_ultima_udare            [min]
+//   t_principal = max(t_prag, t_cadenta)
+//   minutes_until = min(t_principal, t_safety)
+static bool predictNextWatering(const RegParams& rp,
+                                float h_curent,
+                                uint32_t minutes_since_last,
+                                uint32_t& out_minutes,
+                                uint16_t& out_dose_ml,
+                                const char*& out_reason) {
+  if (isnan(h_curent) || h_curent < 0) return false;
+
+  float setpoint   = rp.setpoint10  / 10.0f;
+  float histerezis = rp.hysteresis10 / 10.0f;
+  float tau_h      = rp.tauH;
+  uint32_t T_min   = rp.tMinMin;
+  uint32_t safety_max = rp.safetyMaxMin;
+  uint16_t target  = rp.targetDoseMl;
+  float Kp         = rp.Kp;
+
+  // 1. Timp până sub prag (uscare exponenţială).
+  float prag = setpoint - histerezis;
+  float t_prag_min;
+  if (h_curent <= prag) {
+    t_prag_min = 0;
+  } else if (h_curent <= 0.5f || prag <= 0) {
+    return false;   // imposibil de calculat
+  } else {
+    float t_prag_h = tau_h * logf(h_curent / prag);
+    t_prag_min = t_prag_h * 60.0f;
+  }
+
+  // 2. Timp până la T_min.
+  float t_cadenta_min = (minutes_since_last >= T_min)
+                         ? 0.0f : (float)(T_min - minutes_since_last);
+  // 3. Safety max.
+  float t_safety_min = (minutes_since_last >= safety_max)
+                         ? 0.0f : (float)(safety_max - minutes_since_last);
+
+  float t_principal = t_prag_min > t_cadenta_min ? t_prag_min : t_cadenta_min;
+  float t_final;
+  if (t_safety_min <= t_principal) {
+    t_final = t_safety_min;
+    out_reason = "safety";
+  } else {
+    t_final = t_principal;
+    out_reason = (t_cadenta_min > t_prag_min) ? "cadenta" : "prag";
+  }
+
+  if (t_final < 0) t_final = 0;
+  out_minutes = (uint32_t)(t_final + 0.5f);
+
+  // Doza estimată: max(Kp·histerezis, target), clamp 5..200
+  float doza = Kp * histerezis;
+  if (doza < target) doza = target;
+  if (doza < 5) doza = 5;
+  if (doza > 200) doza = 200;
+  out_dose_ml = (uint16_t)(doza + 0.5f);
+
+  return true;
+}
+
 // Trimite header-ele CORS — dashboard-ul accesează hub-ul din browser.
 void sendCorsHeaders() {
   server.sendHeader("Access-Control-Allow-Origin", "*");
@@ -223,6 +291,40 @@ void handleStatus() {
     } else {
       json += "null";
     }
+
+    // Predicţia "Următoarea udare" — doar pentru porturile confirmate cu
+    // configuraţie validă, senzor proaspăt şi auto-udare activată.
+    // Frontend afişează block-ul de status auto pe baza acestor date.
+    json += ",\"next_watering\":";
+    bool predicted = false;
+    if (portConfirmed[i] && portName[i][0] != '\0' &&
+        portSensors[i].lastUpdateMs > 0) {
+      NodeConfig cfg; RegParams rp; NodeStats st;
+      if (storageLoadConfig(portName[i], cfg) && cfg.configured &&
+          storageLoadParams(portName[i], rp) && rp.autoWateringEnabled) {
+        storageLoadStats(portName[i], st);
+        // Minute de la ultima udare. RTC epoch curent − lastWatering.
+        uint32_t nowEpoch = rtcOk ? rtcEpoch() : 0;
+        uint32_t mins_since = 0;
+        if (nowEpoch > 0 && st.lastWatering > 0 && nowEpoch >= st.lastWatering) {
+          mins_since = (nowEpoch - st.lastWatering) / 60;
+        }
+        uint32_t mins_until = 0;
+        uint16_t est_dose = 0;
+        const char* reason = "";
+        if (predictNextWatering(rp, portSensors[i].soilMoisturePct,
+                                mins_since, mins_until, est_dose, reason)) {
+          json += "{\"minutes_until\":";       json += mins_until;
+          json += ",\"estimated_dose_ml\":";   json += est_dose;
+          json += ",\"reason\":\"";            json += reason; json += "\"";
+          json += ",\"minutes_since_last\":";  json += mins_since;
+          json += "}";
+          predicted = true;
+        }
+      }
+    }
+    if (!predicted) json += "null";
+
     json += "}";
   }
 

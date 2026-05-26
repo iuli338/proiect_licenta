@@ -94,13 +94,41 @@ def _mock_hub_status() -> dict:
         # Nod identificat. Cheia de configurare e NUMELE nodului, nu portul.
         node_name = f"P{p}"
         cfg = state["nodes"].get(node_name)
-        ports.append({
+        sensors = _mock_sensors(node_name)
+        port_data = {
             "port": p, "physical": True, "confirmed": True,
             "name": node_name, "valve": False,
             "configured": bool(cfg and cfg.get("configured")),
             "config": cfg or None,        # config inline — evită un fetch separat
-            "sensors": _mock_sensors(node_name),
-        })
+            "sensors": sensors,
+            "next_watering": None,        # populat mai jos pe noduri cu auto on
+        }
+        # Predicţia: doar pentru noduri cu auto-udare activată şi senzor ok.
+        reg = (cfg or {}).get("regulator") or {}
+        if cfg and cfg.get("configured") and reg.get("auto_watering_enabled"):
+            # În mock simulăm "ultima udare" cu un offset determinist per nod
+            # (ca să avem date diferite la fiecare card). Pe live va veni din
+            # EEPROM-ul hub-ului (lastWatering epoch).
+            seed = sum(ord(c) for c in node_name)
+            minutes_since_last = ((seed * 53) % 600) + 30   # 30..630 min
+            soil_h = sensors.get("soil_moisture_pct")
+            pred = nodes.predict_next_watering(reg, soil_h, minutes_since_last)
+            if pred:
+                port_data["next_watering"] = {
+                    "minutes_until": pred["minutes_until"],
+                    "estimated_dose_ml": pred["estimated_dose_ml"],
+                    "reason": pred["reason"],
+                    "minutes_since_last": minutes_since_last,
+                }
+            # Stats simulate — frontend afişează "Ultima udare: acum X (Y ml)".
+            now_ts = int(time.time())
+            port_data["stats"] = {
+                "last_watering": now_ts - minutes_since_last * 60,
+                "last_dose_ml":  reg.get("target_dose_ml", 30),
+                "total_waterings": 5 + (seed % 20),
+                "total_ml": 150 + (seed % 200),
+            }
+        ports.append(port_data)
     # Ora curentă (server-side în mock) — pe live vine din RTC hub.
     now = time.localtime()
     return {
@@ -160,6 +188,12 @@ def api_hub_status():
             cfg = _fetch_node_config_cached(hub_ip, name, headers)
             port["configured"] = bool(cfg and cfg.get("configured"))
             port["config"] = cfg or None
+            # Stats vin embedded în răspunsul /config — expunem la nivel
+            # de port ca să fie simetric cu mock-ul.
+            if cfg and isinstance(cfg.get("stats"), dict):
+                port["stats"] = cfg["stats"]
+            # next_watering vine deja la nivel de port direct din firmware
+            # (vezi handleStatus în hub_http.ino) — nu suprascriem.
         data.setdefault("ip", hub_ip)   # IP-ul hub-ului pentru cardul Monitor
         return jsonify({"online": True, "data": data})
     except requests.RequestException as e:
