@@ -127,16 +127,67 @@ _FACTORI_TAU = {"scazut": 0.55, "mediu": 1.00, "ridicat": 1.70}
 # Setpoint-ul (umiditatea ţintă) după necesarul de apă al plantei.
 _SETPOINT = {"scazut": 35, "mediu": 50, "ridicat": 65}    # % umiditate
 
-# Lambda IMC: constanta de timp dorită în bucla închisă, în ore.
-# Mic = regulator agresiv (plante însetate); mare = regulator blând.
-_LAMBDA_H = {"scazut": 48.0, "mediu": 30.0, "ridicat": 18.0}
-
 # Histerezis fix pentru declanşare: udarea porneşte sub (setpoint - HISTEREZIS).
-# Mic ca să nu lăsăm solul să cadă prea mult sub ţintă între udări (max o/zi).
 _HISTEREZIS = 5
 
-# Blocaj minim între două udări — promisiunea de proiect: cel mult o pe zi.
-_INTERVAL_UDARE_MIN = 60 * 24    # 24 ore
+# ---------- Clase de udare ----------
+#
+# Fiecare plantă aparţine unei clase biologice — preferinţa pentru ritmul de
+# udare. Înlocuieşte vechiul _LAMBDA_H (legat de water_need). Suculentele cer
+# wet/dry cycle rar şi din plin; ierboasele cer umiditate constantă, doze mici
+# dese. λ-ul regulatorului IMC se scalează cu T_min al clasei → regulator lent
+# pentru plante rare, rapid pentru plante zilnice.
+#
+# Validat prin sim_10 (simulare/sim_10_clase_udare.py): cadenţa observată
+# ≈ T_min cerut pe toate solurile, doar amplitudinea oscilaţiei variază.
+_WATERING_CLASSES = {
+    "foarte_rar": {
+        "T_min_zile":     14.0,
+        "target_dose_ml": 80,
+        "lambda_h":       672.0,    # 28 zile — regulator foarte lent
+        "label":          "Foarte rar (la 2 săptămâni)",
+        "exemple":        "Yucca, Sansevieria, Cactus mari",
+    },
+    "rar": {
+        "T_min_zile":     7.0,
+        "target_dose_ml": 50,
+        "lambda_h":       336.0,    # 14 zile
+        "label":          "Rar (săptămânal)",
+        "exemple":        "Cactus, Aloe, Crassula",
+    },
+    "echilibrat": {
+        "T_min_zile":     3.0,
+        "target_dose_ml": 30,
+        "lambda_h":       144.0,    # 6 zile
+        "label":          "Echilibrat (la 3 zile)",
+        "exemple":        "Ficus, Monstera, Pothos",
+    },
+    "frecvent": {
+        "T_min_zile":     1.5,
+        "target_dose_ml": 20,
+        "lambda_h":       72.0,     # 3 zile
+        "label":          "Frecvent (la 1-2 zile)",
+        "exemple":        "Spathiphyllum, Calathea",
+    },
+    "zilnic": {
+        "T_min_zile":     0.5,
+        "target_dose_ml": 15,
+        "lambda_h":       24.0,     # 1 zi
+        "label":          "Zilnic (de două ori pe zi)",
+        "exemple":        "Mentă, busuioc, ferigi",
+    },
+}
+
+# Valori valide pentru câmpul `watering_class`.
+WATERING_CLASS_KEYS = tuple(_WATERING_CLASSES.keys())
+
+# Clasa implicită pentru plante fără câmp explicit (catalog vechi sau plantă
+# custom). "Echilibrat" e cea mai sigură — cadenţă moderată, doză moderată.
+_WATERING_CLASS_DEFAULT = "echilibrat"
+
+# Safety pe firmware: max timp fără udare = 1.2× T_min (override doar la
+# întârziere > 20%). Vezi simulare/proces.py.
+_SAFETY_MAX_FACTOR = 1.2
 
 
 def derive_model(retention: str) -> dict:
@@ -151,81 +202,105 @@ def derive_model(retention: str) -> dict:
     }
 
 
-def derive_regulator(water_need: str, retention: str) -> dict:
+def derive_regulator(water_need: str, retention: str,
+                     watering_class: str = _WATERING_CLASS_DEFAULT) -> dict:
     """Parametrii regulatorului PI, acordaţi prin IMC pe modelul solului.
 
-    Întoarce parametrii NOI (model + acordare IMC) plus câteva câmpuri
-    LEGACY păstrate pentru compatibilitate cu firmware-ul ESP existent şi
-    cu statisticile mock. Firmware-ul va fi adaptat ulterior la PI.
+    SOLUL  alege parametrii MODELULUI               (K, tau)         — din retention
+    PLANTA alege SETPOINT-ul                        (35/50/65)        — din water_need
+    PLANTA alege CADENŢA + DOZA + λ                 (T_min, target)   — din watering_class
 
     Câmpuri noi:
       - model: {K, tau_h}                 — parametrii procesului (din sol)
-      - setpoint              : umiditate ţintă [%]
+      - setpoint              : umiditate ţintă [%]              (din water_need)
       - hysteresis            : udare porneşte sub (setpoint - hysteresis) [%]
-      - lambda_h              : constanta de timp dorită în b.î. [ore]
+      - lambda_h              : constanta de timp în b.î. [ore]  (din watering_class)
       - Kp                    : câştig proporţional [ml / % eroare]
       - Ki                    : câştig integral [ml / (% eroare · h)]
-      - min_interval_min      : blocaj minim între udări [min]
-      - dose_estimat_ml       : volum tipic al unei udări (pt. statistici/UI)
+      - T_min_min             : interval minim între udări [min] (din watering_class)
+      - target_dose_ml        : doză ţintă per udare [ml]        (din watering_class)
+      - safety_max_min        : max timp fără udare [min] (1.2× T_min)
+      - watering_class        : cheia clasei alese
+      - dose_estimat_ml       : volum tipic per udare (pt. statistici/UI) — = target_dose_ml
+      - min_interval_min      : LEGACY = T_min_min (compat firmware vechi)
 
-    Câmpuri legacy (acelaşi sens cu cele vechi, dar derivate din PI):
+    Câmpuri legacy (păstrate pentru compatibilitate temporară):
       - target_moisture       = setpoint
-      - dose_ml               = dose_estimat_ml
-      - check_interval_min    = min_interval_min
+      - dose_ml               = target_dose_ml
+      - check_interval_min    = T_min_min
     """
     model = derive_model(retention)
     K, tau = model["K"], model["tau_h"]
 
     setpoint = _SETPOINT.get(water_need, 50)
-    lam = _LAMBDA_H.get(water_need, 30.0)
+
+    # Citim parametrii clasei de udare. Fallback la "echilibrat" pentru
+    # plantele care nu au câmp `watering_class` în catalog (compat).
+    cls = _WATERING_CLASSES.get(watering_class, _WATERING_CLASSES[_WATERING_CLASS_DEFAULT])
+    T_min_zile = cls["T_min_zile"]
+    T_min_min = int(round(T_min_zile * 24 * 60))
+    target_dose_ml = int(cls["target_dose_ml"])
+    lam = float(cls["lambda_h"])
 
     # Acordare IMC pentru proces de ordin 1: Kp = tau / (K · lambda), Ki = Kp / tau.
     Kp = tau / (K * lam)
     Ki = Kp / tau
 
-    # Volumul TIPIC al unei udări — pentru afişare în UI şi statistici.
-    # PI-ul îl calculează dinamic la fiecare udare; aici estimăm valoarea
-    # de regim permanent: cât trebuie ca să compensăm evaporarea de o zi
-    # şi să aducem solul de la (setpoint - histerezis) înapoi la setpoint.
-    #
-    # Pierderea zilnică (la 24h) pe modelul de ordin 1, pornind de la
-    # setpoint, este aproximativ:  delta_h ≈ (setpoint - h_inf) · (1 - e^(-24/τ)).
-    # h_inf ≈ 0% (sol uscat de echilibru); adăugăm şi histerezisul.
-    pierdere_zilnica = setpoint * (1.0 - math.exp(-24.0 / tau))
-    dose_estimat = (pierdere_zilnica + _HISTEREZIS) / K
-    dose_estimat = max(15, min(200, int(round(dose_estimat))))
+    # Safety max: cel puţin 1.2× T_min, ca să nu intervină prea repede şi să
+    # anuleze cadenţa biologică a clasei. Pentru "foarte_rar" (T_min=14 zile)
+    # asta dă safety_max ≈ 17 zile.
+    safety_max_min = int(round(_SAFETY_MAX_FACTOR * T_min_min))
 
     return {
         # --- model (din sol) ---
         "model": model,
-        # --- regulator (din plantă, acordat pe sol) ---
+        # --- regulator (acordat pe sol + clasă) ---
         "setpoint": setpoint,
         "hysteresis": _HISTEREZIS,
         "lambda_h": lam,
         "Kp": round(Kp, 3),
         "Ki": round(Ki, 4),
-        "min_interval_min": _INTERVAL_UDARE_MIN,
-        "dose_estimat_ml": dose_estimat,
-        # --- legacy (pentru firmware ESP actual + statistici mock) ---
+        # --- clasă de udare (NOU) ---
+        "watering_class": watering_class if watering_class in _WATERING_CLASSES
+                                         else _WATERING_CLASS_DEFAULT,
+        "T_min_min": T_min_min,
+        "target_dose_ml": target_dose_ml,
+        "safety_max_min": safety_max_min,
+        # --- alias-uri folosite în UI + firmware (acelaşi sens cu noile câmpuri) ---
+        "min_interval_min": T_min_min,
+        "dose_estimat_ml": target_dose_ml,
+        # --- legacy (compat cu cod vechi care încă citeşte aceste chei) ---
         "target_moisture": setpoint,
-        "dose_ml": dose_estimat,
-        "check_interval_min": _INTERVAL_UDARE_MIN,
+        "dose_ml": target_dose_ml,
+        "check_interval_min": T_min_min,
     }
 
 
 def explain_regulator(reg: dict) -> list[dict]:
     """Explicaţii lizibile pentru pasul de sumar al wizardului.
 
-    Trei grupuri vizuale:
-      sol        — parametrii modelului (K, τ) — vin din alegerea solului
-      planta     — parametrii regulatorului (setpoint, λ, Kp, Ki) — din plantă
-      functionare — comportamentul efectiv (când udă, cât udă)
+    Patru grupuri vizuale:
+      sol         — parametrii modelului (K, τ) — vin din alegerea solului
+      planta      — setpoint-ul (umiditate ţintă) — din necesarul de apă
+      udare       — clasa de udare (cadenţă + doză ţintă) — din specia plantei
+      functionare — comportamentul efectiv (regulator PI, când udă, cât udă)
 
     Front-end-ul afişează grupul ca etichetă colorată în faţa textului.
     """
     m = reg.get("model", {})
     K = m.get("K", _K_NOMINAL)
     tau = m.get("tau_h", _TAU_REF_H)
+
+    # Citim clasa de udare (poate lipsi dacă reg vine din override sau cod vechi).
+    cls_key = reg.get("watering_class", _WATERING_CLASS_DEFAULT)
+    cls = _WATERING_CLASSES.get(cls_key, _WATERING_CLASSES[_WATERING_CLASS_DEFAULT])
+    T_min_zile = cls["T_min_zile"]
+    if T_min_zile >= 1:
+        cadenta_text = f"{T_min_zile:.0f} zile" if T_min_zile == int(T_min_zile) \
+                       else f"{T_min_zile:.1f} zile"
+    else:
+        cadenta_text = f"{T_min_zile * 24:.0f} ore"
+
     return [
         {"group": "sol",
          "text": f"Model identificat din date — câştig K = {K} % umiditate / ml apă."},
@@ -233,17 +308,21 @@ def explain_regulator(reg: dict) -> list[dict]:
          "text": f"Constantă de timp a uscării τ = {tau} h "
                  f"(cât rezistă solul fără udare)."},
         {"group": "planta",
-         "text": f"Setpoint {reg['setpoint']}% umiditate, λ = "
-                 f"{reg['lambda_h']:.0f} h (cât de prompt reacţionează regulatorul)."},
-        {"group": "planta",
+         "text": f"Setpoint {reg['setpoint']}% umiditate "
+                 f"(umiditatea ţintă pe care o menţinem)."},
+        {"group": "udare",
+         "text": f"Tipul de udare: <strong>{cls['label']}</strong> — "
+                 f"udare cel puţin la {cadenta_text}, doză ţintă "
+                 f"{reg['target_dose_ml']} ml."},
+        {"group": "udare",
+         "text": f"Exemple plante din această clasă: {cls['exemple']}."},
+        {"group": "functionare",
          "text": f"Regulator PI acordat prin IMC: Kp = {reg['Kp']}, "
-                 f"Ki = {reg['Ki']} ml/(%·h)."},
+                 f"Ki = {reg['Ki']} ml/(%·h); λ = {reg['lambda_h']:.0f} h."},
         {"group": "functionare",
          "text": f"Udarea porneşte când umiditatea scade sub "
-                 f"{reg['setpoint'] - reg['hysteresis']}%, cel mult o dată la 24 h."},
-        {"group": "functionare",
-         "text": f"Volum estimat per udare ≈ {reg['dose_estimat_ml']} ml "
-                 f"(PI-ul ajustează dinamic în funcţie de eroare)."},
+                 f"{reg['setpoint'] - reg['hysteresis']}% "
+                 f"şi a trecut intervalul minim de la ultima udare."},
     ]
 
 
@@ -468,6 +547,15 @@ def build_node_config(payload: dict) -> tuple[Optional[dict], Optional[str]]:
         return None, "Nivel de necesar de apă invalid."
     plant_custom = bool(plant.get("custom"))
     plant_id = (plant.get("id") or "custom").strip()
+    # Clasa de udare — biologic asociată plantei. Vine din catalog la cele
+    # built-in; pentru plante custom utilizatorul o alege în wizard (sau
+    # primeşte default "echilibrat").
+    watering_class = (plant.get("watering_class") or _WATERING_CLASS_DEFAULT).strip()
+    if watering_class not in WATERING_CLASS_KEYS:
+        return None, (
+            f"Clasă de udare invalidă: {watering_class}. "
+            f"Valori valide: {', '.join(WATERING_CLASS_KEYS)}."
+        )
 
     # --- sol ---
     soil_name = (soil.get("name") or "").strip()
@@ -490,7 +578,7 @@ def build_node_config(payload: dict) -> tuple[Optional[dict], Optional[str]]:
         # Cădem pe prima culoare din catalog (sau "mint").
         color = next(iter(valid_colors)) if valid_colors else "mint"
 
-    regulator = derive_regulator(water_need, retention)
+    regulator = derive_regulator(water_need, retention, watering_class)
 
     # Override manual din UI (pagina "Parametri" -> Editează). Validăm fiecare
     # câmp şi îl suprascriem peste regulatorul derivat. Câmpurile lipsă se
@@ -505,6 +593,7 @@ def build_node_config(payload: dict) -> tuple[Optional[dict], Optional[str]]:
         "plant": {
             "id": plant_id, "name": plant_name,
             "water_need": water_need, "custom": plant_custom,
+            "watering_class": watering_class,
         },
         "soil": {
             "id": soil_id, "name": soil_name,
@@ -529,14 +618,18 @@ _OVERRIDE_SCHEMA = {
     # Câmpurile de bază ale regulatorului
     "setpoint":          (float, 0.0,    100.0),     # % umiditate
     "hysteresis":        (float, 0.5,    50.0),      # % umiditate
-    "lambda_h":          (float, 0.1,    500.0),     # ore
+    "lambda_h":          (float, 0.1,    1000.0),    # ore — extins pt. clasa "foarte_rar" (672h)
     "Kp":                (float, 0.0,    1000.0),    # ml / % eroare
     "Ki":                (float, 0.0,    100.0),     # ml / (% · h)
-    "min_interval_min":  (int,   1,      10080),     # 1 min … 7 zile
-    "dose_estimat_ml":   (int,   1,      2000),      # ml
+    "min_interval_min":  (int,   1,      30240),     # 1 min … 21 zile (alias T_min_min)
+    "dose_estimat_ml":   (int,   1,      2000),      # ml (alias target_dose_ml)
     # Modelul (sub-obiect)
     "model.K":           (float, 0.001,  100.0),     # %/ml
     "model.tau_h":       (float, 0.1,    1000.0),    # ore
+    # NOU — clasa de udare (LAYOUT_VERSION 5)
+    "T_min_min":         (int,   1,      30240),     # 1 min … 21 zile
+    "target_dose_ml":    (int,   1,      2000),      # ml — doza ţintă per udare
+    "safety_max_min":    (int,   1,      40320),     # 1 min … 28 zile — max fără udare
 }
 
 
@@ -566,6 +659,19 @@ def _apply_regulator_override(reg: dict, override: dict):
 
     if model:
         reg["model"] = model
+
+    # Sincronizare reciprocă între câmpurile noi şi alias-urile legacy.
+    # Utilizatorul poate seta fie "T_min_min", fie "min_interval_min" — le
+    # ţinem identice. Acelaşi pentru target_dose_ml ↔ dose_estimat_ml.
+    if "T_min_min" in override and "min_interval_min" not in override:
+        reg["min_interval_min"] = reg["T_min_min"]
+    elif "min_interval_min" in override and "T_min_min" not in override:
+        reg["T_min_min"] = reg["min_interval_min"]
+
+    if "target_dose_ml" in override and "dose_estimat_ml" not in override:
+        reg["dose_estimat_ml"] = reg["target_dose_ml"]
+    elif "dose_estimat_ml" in override and "target_dose_ml" not in override:
+        reg["target_dose_ml"] = reg["dose_estimat_ml"]
 
     # Câmpurile legacy reflectă noile valori (pentru firmware-ul existent
     # şi pentru statistici mock care încă citesc dose_ml / target_moisture).

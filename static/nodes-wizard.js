@@ -202,8 +202,12 @@
 
     nodes.catalog.plants.forEach((pl) => {
       grid.appendChild(makeChoice(pl.name, waterLabel(pl.water_need), () => {
+        // watering_class vine din catalog; fallback la "echilibrat" pentru
+        // intrări vechi care nu au câmpul (backend acceptă oricum default).
         wiz.plant = { id: pl.id, name: pl.name,
-                      water_need: pl.water_need, custom: false };
+                      water_need: pl.water_need,
+                      watering_class: pl.watering_class || 'echilibrat',
+                      custom: false };
         hide(document.getElementById('plant-custom'));
         markChosen(grid, pl.id);
         document.getElementById('plant-next').disabled = false;
@@ -269,7 +273,8 @@
       'plant-custom-name', 'plant-name-counter', 'plant-name-error');
     const ok = name && lvl && fits;
     wiz.plant = ok
-      ? { id: 'custom', name: name, water_need: lvl, custom: true }
+      ? { id: 'custom', name: name, water_need: lvl,
+          watering_class: 'echilibrat', custom: true }
       : null;
     document.getElementById('plant-next').disabled = !ok;
   }
@@ -349,25 +354,46 @@
           body: JSON.stringify({ plant: wiz.plant, soil: wiz.soil }),
         });
       list.innerHTML = '';
-      // Backend-ul trimite linii ca obiecte {group, text} — afişăm grupul
-      // ca etichetă colorată în faţa textului. Fallback la string simplu
-      // dacă vine vreodată în formatul vechi.
-      (j.explanation || []).forEach((line) => {
-        const li = document.createElement('li');
-        if (typeof line === 'string') {
-          li.textContent = line;
-        } else {
-          li.dataset.group = line.group || '';
-          const tag = document.createElement('span');
-          tag.className = 'summary-list__tag';
-          tag.textContent = summaryTagLabel(line.group);
-          const txt = document.createElement('span');
-          txt.className = 'summary-list__text';
-          txt.textContent = line.text || '';
-          li.appendChild(tag);
-          li.appendChild(txt);
+      // Grupăm liniile pe categoria lor şi randăm fiecare grup ca:
+      //   <li.header>Categoria</li>   →  <li.item>linia 1</li> ...
+      // "sol" şi "planta" sunt afişate sub un singur header combinat
+      // "Sol / Plantă" (vizual mai coerente — ţin de fizica solului +
+      // alegerea utilizatorului).
+      const lines = j.explanation || [];
+      // Pas 1: fuzionăm sol + planta într-un singur grup virtual "sol_planta".
+      const normalize = (g) => (g === 'sol' || g === 'planta') ? 'sol_planta' : g;
+      const groupsOrder = [];
+      const byGroup = {};
+      lines.forEach((line) => {
+        const rawG = (typeof line === 'string') ? '' : (line.group || '');
+        const g = normalize(rawG);
+        const txt = (typeof line === 'string') ? line : (line.text || '');
+        if (!byGroup[g]) {
+          byGroup[g] = { items: [], dataAttr: rawG };  // dataAttr pt. culoarea bullet-ului
+          groupsOrder.push(g);
         }
-        list.appendChild(li);
+        // Pentru bullet-uri păstrăm grupul original (sol vs. planta) ca
+        // să-i dăm culoarea proprie.
+        byGroup[g].items.push({ text: txt, originalGroup: rawG });
+      });
+
+      groupsOrder.forEach((g) => {
+        const header = document.createElement('li');
+        header.className = 'summary-list__header';
+        header.dataset.group = g;   // sol_planta / udare / functionare
+        header.textContent = summaryTagLabel(g) || 'Detalii';
+        list.appendChild(header);
+
+        byGroup[g].items.forEach(({ text, originalGroup }) => {
+          const li = document.createElement('li');
+          li.className = 'summary-list__item';
+          li.dataset.group = originalGroup;   // sol / planta / udare / functionare
+          const span = document.createElement('span');
+          span.className = 'summary-list__text';
+          span.innerHTML = text;
+          li.appendChild(span);
+          list.appendChild(li);
+        });
       });
     } catch (e) {
       list.innerHTML = '';
@@ -525,8 +551,8 @@
              ridicat: 'necesar ridicat' }[lvl] || lvl;
   }
   function summaryTagLabel(group) {
-    return { sol: 'Sol', planta: 'Plantă',
-             functionare: 'Funcţionare' }[group] || '';
+    return { sol: 'Sol', planta: 'Plantă', sol_planta: 'Sol / Plantă',
+             udare: 'Udare', functionare: 'Funcţionare' }[group] || '';
   }
   function retentionLabel(lvl) {
     return { scazut: 'reţine puţină apă', mediu: 'retenţie medie',

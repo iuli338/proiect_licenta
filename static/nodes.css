@@ -654,20 +654,42 @@
   font-weight: 600;
 }
 
-/* ---------- 6. Sumar parametri ---------- */
+/* ---------- 6. Sumar parametri ----------
+
+   Layout pe grupuri: header colorat per categorie (Sol / Plantă / Udare /
+   Funcţionare) urmat de bullet-urile cu detaliile. Headerul indică şi
+   culoarea grupului prin border-left + accent. */
 
 .summary-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
+  gap: var(--space-2);
   margin-top: var(--space-4);
 }
 
-.summary-list li {
+/* Header de grup — titlul categoriei (apare o singură dată per grup) */
+.summary-list__header {
+  font-family: var(--font-display);
+  font-size: var(--fs-base);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: var(--space-2) var(--space-3);
+  margin-top: var(--space-3);
+  border-left: 3px solid var(--color-text-muted);
+  color: var(--color-text);
+  background: transparent;
+}
+.summary-list__header:first-child {
+  margin-top: 0;
+}
+
+/* Bullet-urile sub fiecare header */
+.summary-list__item {
   display: flex;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
+  margin-left: var(--space-4);
   border-radius: var(--radius-md);
   background: var(--color-bg-deep);
   border: 1px solid var(--color-border-soft);
@@ -675,7 +697,7 @@
   color: var(--color-text-muted);
 }
 
-.summary-list li::before {
+.summary-list__item::before {
   content: '';
   flex-shrink: 0;
   width: 6px;
@@ -685,46 +707,46 @@
   background: var(--color-mint);
 }
 
-/* Linii cu etichetă de grup (sol/plantă/funcţionare) — eticheta apare ca
-   un mic chip colorat în faţa textului. Punctul de mai sus dispare când
-   există tag. */
-.summary-list li[data-group]::before { display: none; }
-
-.summary-list__tag {
-  flex-shrink: 0;
-  align-self: flex-start;
-  padding: 2px 8px;
-  border-radius: var(--radius-sm);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  line-height: 1.5;
-  background: var(--color-surface);
-  color: var(--color-text-muted);
-  border: 1px solid var(--color-border-soft);
-}
-
 .summary-list__text {
   flex: 1;
   min-width: 0;
 }
 
-/* Culori pe grup — folosim variabilele temei. */
-.summary-list li[data-group='sol'] .summary-list__tag {
-  background: rgba(184, 240, 201, 0.10);
+/* Culori per grup — accentul de pe header + bullet-ul de pe items.
+   Header-ul combinat "sol_planta" foloseşte mint (culoarea predominantă a
+   temei); bullet-urile keep colorile lor distincte (mint pt. sol, gălbui
+   pt. plantă) ca să se vadă uşor ce e din ce. */
+.summary-list__header[data-group='sol_planta'],
+.summary-list__header[data-group='sol'] {
+  border-left-color: var(--color-mint);
   color: var(--color-mint);
-  border-color: rgba(184, 240, 201, 0.30);
 }
-.summary-list li[data-group='planta'] .summary-list__tag {
-  background: rgba(255, 204, 102, 0.10);
+.summary-list__item[data-group='sol']::before {
+  background: var(--color-mint);
+}
+
+.summary-list__header[data-group='planta'] {
+  border-left-color: #ffcc66;
   color: #ffcc66;
-  border-color: rgba(255, 204, 102, 0.30);
 }
-.summary-list li[data-group='functionare'] .summary-list__tag {
-  background: rgba(140, 200, 255, 0.10);
+.summary-list__item[data-group='planta']::before {
+  background: #ffcc66;
+}
+
+.summary-list__header[data-group='udare'] {
+  border-left-color: #ba9ce8;
+  color: #ba9ce8;
+}
+.summary-list__item[data-group='udare']::before {
+  background: #ba9ce8;
+}
+
+.summary-list__header[data-group='functionare'] {
+  border-left-color: #8cc8ff;
   color: #8cc8ff;
-  border-color: rgba(140, 200, 255, 0.30);
+}
+.summary-list__item[data-group='functionare']::before {
+  background: #8cc8ff;
 }
 
 /* ---------- 7. Culori card ---------- */
@@ -860,6 +882,9 @@
 }
 .params-section[data-group='planta'] .params-section__title::before {
   background: #ffcc66;
+}
+.params-section[data-group='udare'] .params-section__title::before {
+  background: #ba9ce8;
 }
 .params-section[data-group='functionare'] .params-section__title::before {
   background: #8cc8ff;

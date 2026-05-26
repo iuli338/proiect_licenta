@@ -30,6 +30,12 @@
   // Schema câmpurilor afişate — sursa de adevăr pentru rendering şi pentru
   // construirea override-ului. Trebuie să corespundă cu _OVERRIDE_SCHEMA din
   // backend (node_config.py). `path` = cheia trimisă la server.
+  //
+  // Grupuri (sincron cu sumarul wizardului + nodes.css):
+  //   sol         — fizica solului (K, τ) — derivate din retenţia aleasă
+  //   planta      — setpoint umiditate ţintă — din necesarul de apă
+  //   udare       — cadenţa biologică (T_min, target_dose) — din clasa plantei
+  //   functionare — PI-ul efectiv (λ, Kp, Ki, histerezis) — recalculate IMC
   const FIELDS = {
     sol: [
       { path: 'model.K',          label: 'Câştig K',
@@ -42,28 +48,34 @@
     planta: [
       { path: 'setpoint',         label: 'Setpoint umiditate',
         unit: '%',     step: 1,     dec: 0,
-        hint: 'valoarea menţinută în jurul căreia lucrează PI-ul' },
+        hint: 'umiditatea ţintă pe care o menţinem' },
+    ],
+    udare: [
+      { path: 'T_min_min',        label: 'Interval minim între udări',
+        unit: 'min',   step: 1,     dec: 0,
+        hint: 'cadenţă biologică — sub atât NU udăm, oricât ar cere PI',
+        displayAsHours: true },
+      { path: 'target_dose_ml',   label: 'Doza ţintă per udare',
+        unit: 'ml',    step: 1,     dec: 0,
+        hint: 'când udăm, livrăm cel puţin atâta apă' },
+      { path: 'safety_max_min',   label: 'Max timp fără udare',
+        unit: 'min',   step: 1,     dec: 0,
+        hint: 'override de siguranţă — udare forţată după',
+        displayAsHours: true },
+    ],
+    functionare: [
+      { path: 'hysteresis',       label: 'Histerezis',
+        unit: '%',     step: 1,     dec: 0,
+        hint: 'lăţimea benzii de toleranţă sub setpoint' },
       { path: 'lambda_h',         label: 'λ (constanta în b.î.)',
         unit: 'h',     step: 1,     dec: 0,
-        hint: 'cât de prompt reacţionează regulatorul' },
+        hint: 'cât de prompt reacţionează regulatorul PI' },
       { path: 'Kp',               label: 'Kp (proporţional)',
         unit: '',      step: 0.001, dec: 3,
         hint: 'cât adaugă din eroarea curentă' },
       { path: 'Ki',               label: 'Ki (integral)',
         unit: '/h',    step: 0.0001, dec: 4,
         hint: 'cât adaugă din eroarea acumulată' },
-    ],
-    functionare: [
-      { path: 'hysteresis',       label: 'Histerezis',
-        unit: '%',     step: 1,     dec: 0,
-        hint: 'lăţimea benzii de toleranţă' },
-      { path: 'min_interval_min', label: 'Blocaj între udări',
-        unit: 'min',   step: 1,     dec: 0,
-        hint: 'timpul minim între două udări consecutive',
-        displayAsHours: true },
-      { path: 'dose_estimat_ml',  label: 'Volum estimat per udare',
-        unit: 'ml',    step: 1,     dec: 0,
-        hint: 'PI-ul ajustează dinamic în funcţie de eroare' },
     ],
   };
 
@@ -191,8 +203,9 @@
     }
 
     renderSection('Model sol', 'sol', FIELDS.sol);
-    renderSection('Acordare regulator', 'planta', FIELDS.planta);
-    renderSection('Funcţionare', 'functionare', FIELDS.functionare);
+    renderSection('Setpoint plantă', 'planta', FIELDS.planta);
+    renderSection('Udare', 'udare', FIELDS.udare);
+    renderSection('Regulator PI', 'functionare', FIELDS.functionare);
 
     refreshUpdateButton();
   }
@@ -468,7 +481,11 @@
     if (v == null || Number.isNaN(v)) return '—';
     const n = Number(v);
     if (f.displayAsHours && f.unit === 'min') {
-      // Afişare prietenoasă pentru blocaj: 1440 min → "24 h".
+      // Afişare prietenoasă pentru intervale: 1440 min → "1 zi", 720 → "12 h".
+      if (n >= 24 * 60) {
+        const d = n / (24 * 60);
+        return (d === Math.round(d) ? d : d.toFixed(1)) + ' zile';
+      }
       if (n >= 60) {
         const h = n / 60;
         return (h === Math.round(h) ? h : h.toFixed(1)) + ' h';

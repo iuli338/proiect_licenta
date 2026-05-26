@@ -1,10 +1,11 @@
 {
-  "_comment": "Catalog Dropwise — plante, soluri, culori. Editabil: adauga sau scoate intrari, interfata le preia automat. water_need / retention: scazut | mediu | ridicat. lux_min / lux_max: pragurile de iluminare (lx) sub/peste care planta sufera — folosite pentru alerte vizuale pe cardul Monitor.",
+  "_comment": "Catalog Dropwise — plante, soluri, culori. Editabil: adauga sau scoate intrari, interfata le preia automat. water_need / retention: scazut | mediu | ridicat. watering_class: foarte_rar | rar | echilibrat | frecvent | zilnic (cadenta biologica de udare). lux_min / lux_max: pragurile de iluminare (lx) sub/peste care planta sufera.",
   "plants": [
     {
       "id": "ficus",
       "name": "Ficus",
       "water_need": "mediu",
+      "watering_class": "echilibrat",
       "lux_min": 1500,
       "lux_max": 15000
     },
@@ -12,6 +13,7 @@
       "id": "monstera",
       "name": "Monstera",
       "water_need": "mediu",
+      "watering_class": "echilibrat",
       "lux_min": 1000,
       "lux_max": 10000
     },
@@ -19,6 +21,7 @@
       "id": "sansevieria",
       "name": "Sansevieria",
       "water_need": "scazut",
+      "watering_class": "foarte_rar",
       "lux_min": 300,
       "lux_max": 30000
     },
@@ -26,6 +29,7 @@
       "id": "feriga",
       "name": "Ferigă",
       "water_need": "ridicat",
+      "watering_class": "zilnic",
       "lux_min": 500,
       "lux_max": 5000
     },
@@ -33,6 +37,7 @@
       "id": "cactus",
       "name": "Cactus / Suculentă",
       "water_need": "scazut",
+      "watering_class": "rar",
       "lux_min": 5000,
       "lux_max": 50000
     },
@@ -40,6 +45,7 @@
       "id": "pothos",
       "name": "Pothos",
       "water_need": "mediu",
+      "watering_class": "echilibrat",
       "lux_min": 500,
       "lux_max": 8000
     },
@@ -47,6 +53,7 @@
       "id": "calathea",
       "name": "Calathea",
       "water_need": "ridicat",
+      "watering_class": "frecvent",
       "lux_min": 800,
       "lux_max": 5000
     },
@@ -54,6 +61,7 @@
       "id": "anthurium",
       "name": "Anthurium",
       "water_need": "mediu",
+      "watering_class": "echilibrat",
       "lux_min": 1500,
       "lux_max": 10000
     },
@@ -61,6 +69,7 @@
       "id": "lily",
       "name": "Crin",
       "water_need": "mediu",
+      "watering_class": "echilibrat",
       "lux_min": 2000,
       "lux_max": 20000
     }
