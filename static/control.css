@@ -384,3 +384,142 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+/* ============================================================
+   Udare cantitate fixă (secţiunea A2)
+   ============================================================ */
+
+.dose-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.dose-form__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+/* Rândul Port are nevoie de o lăţime minimă ca să respire dropdown-ul.
+   Rândul Cantitate îşi ia lăţimea de la input (90 px) ca "ml" să fie lipit. */
+.dose-form__row:has(.dose-form__select) {
+  min-width: 120px;
+}
+
+.dose-form__label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.dose-form__select,
+.dose-form__input {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-deep);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--fs-base);
+}
+
+.dose-form__select:focus,
+.dose-form__input:focus {
+  outline: none;
+  border-color: var(--color-mint);
+  box-shadow: 0 0 0 3px rgba(184, 240, 201, 0.18);
+}
+
+.dose-form__select:disabled,
+.dose-form__input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Input numeric — scoatem săgeţile native (arată ciudat cu tema dark).
+   width: max-content face wrapper-ul să se mulează pe input, ca să nu
+   rămână spaţiu gol între el şi "ml". */
+.dose-form__input-wrap {
+  display: inline-block;
+  width: max-content;
+}
+
+.dose-form__input {
+  width: 90px;
+  text-align: right;
+  font-family: var(--font-mono);
+  -moz-appearance: textfield;            /* Firefox */
+}
+.dose-form__input::-webkit-outer-spin-button,
+.dose-form__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;              /* Chrome/Safari/Edge */
+  margin: 0;
+}
+
+/* "ml" lângă input, ca etichetă în afara câmpului. Mimicăm padding-ul
+   vertical al input-ului ca să stea pe acelaşi baseline cu textul din el.
+   Margin negativ scoate elementul din gap-ul flex-ului părinte ca să stea
+   lipit de input. */
+.dose-form__unit {
+  align-self: flex-end;
+  margin-left: calc(var(--space-4) * -1 + 6px);
+  padding: var(--space-3) 0;
+  font-size: var(--fs-base);
+  color: var(--color-text-muted);
+  line-height: 1;
+}
+
+.dose-form__start {
+  margin-left: 40px;
+  min-width: 160px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* Container progress — apare cu o tranziţie smooth după start. */
+.dose-progress {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dose-progress__bar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(184, 240, 201, 0.12);
+  overflow: hidden;
+}
+
+.dose-progress__fill {
+  height: 100%;
+  width: 0%;
+  background: var(--color-mint);
+  border-radius: 4px;
+  transition: width 0.3s linear;
+}
+
+.dose-progress__label {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+/* Disable total al tab-ului Control pe durata dozării — folosit prin
+   data-dose-active pe #control-flow. */
+#control-flow[data-dose-active='true'] .gpio-grid,
+#control-flow[data-dose-active='true'] .water-grid,
+#control-flow[data-dose-active='true'] .dose-form__select,
+#control-flow[data-dose-active='true'] .dose-form__input {
+  opacity: 0.45;
+  pointer-events: none;
+}

@@ -28,9 +28,14 @@
   const pinPending = { 16: false, 17: false, 18: false, 19: false };
   const waterPending = { 1: false, 2: false, 3: false };
 
-  // Disclaimer-ul de risc se afişează o singură dată per sesiune.
-  // Devine true după ce utilizatorul confirmă.
-  let disclaimerAccepted = false;
+  // Disclaimer-ul de risc se afişează o singură dată per sesiune browser
+  // — persistat în sessionStorage ca să supravieţuiască la refresh, dar
+  // să apară din nou la închidere/redeschidere de tab.
+  const DISCLAIMER_KEY = 'dropwise.control.disclaimerAccepted';
+  let disclaimerAccepted = (function () {
+    try { return sessionStorage.getItem(DISCLAIMER_KEY) === 'true'; }
+    catch (_) { return false; }
+  })();
 
   let el = {};
 
@@ -114,6 +119,149 @@
     }
   }
 
+  // ---------- Secţiunea A2: Udare cantitate fixă ----------
+  //
+  // Pornim o udare cu volum exact pe un port. Hub-ul răspunde 200 imediat
+  // cu durata estimată (ms); pompa se opreşte automat. Detectăm finalul
+  // prin polling pe /status (wateringPort revine la -1).
+
+  // Stare locală a UI-ului de dozare.
+  let doseActive = false;        // dozare în curs (UI blocat)
+  let doseExpectedTotalMs = 0;   // durata totală anunţată de hub
+  let doseStartMs = 0;           // ms (Date.now) la pornire
+  let doseAnimTimer = null;      // requestAnimationFrame loop pentru progress
+  let doseLastPort = 0;          // ultimul port udat (pentru toast)
+  let doseLastMl = 0;            // ultima cantitate (pentru toast)
+
+  async function startDose() {
+    if (doseActive) return;
+    const port = parseInt(el.dosePort.value, 10);
+    const ml = parseInt(el.doseMl.value, 10);
+    if (!port || port < 1 || port > 3) return;
+    if (!ml || ml < 1 || ml > 500) {
+      el.waterStatus.textContent = 'Cantitate invalidă (1..500 ml).';
+      return;
+    }
+
+    setDoseUiBusy(true, 'Trimite comanda…');
+    try {
+      const r = await fetch('/api/hub/dose/' + port, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ml: ml }),
+      });
+      const j = await r.json();
+      if (!r.ok) {
+        throw new Error(j.error || ('HTTP ' + r.status));
+      }
+      // Hub-ul a primit comanda — pornim progress-ul cu durata totală.
+      doseExpectedTotalMs = j.total_ms || (j.dose_ms ? (j.dose_ms + 3000) : 5000);
+      doseStartMs = Date.now();
+      doseLastPort = port;
+      doseLastMl = ml;
+      startDoseProgressLoop(port, ml);
+    } catch (e) {
+      setDoseUiBusy(false);
+      el.waterStatus.textContent = 'Udare eşuată: ' + e.message;
+    }
+  }
+
+  /** Animaţia progress bar-ului — rulează 30 fps până la final. */
+  function startDoseProgressLoop(port, ml) {
+    function tick() {
+      const elapsed = Date.now() - doseStartMs;
+      const pct = Math.min(100, (elapsed / doseExpectedTotalMs) * 100);
+      el.doseProgressFill.style.width = pct.toFixed(1) + '%';
+      // Etichetă cu secunde rămase + faza estimată.
+      const remaining = Math.max(0, doseExpectedTotalMs - elapsed) / 1000;
+      let phase;
+      if (elapsed < 2000) phase = 'Se deschide valva…';
+      else if (elapsed < doseExpectedTotalMs - 1000) phase = 'Se pompează apa…';
+      else phase = 'Se închide valva…';
+      el.doseProgressLabel.textContent =
+        phase + '   (Port ' + port + ' · ' + ml + ' ml · -' +
+        remaining.toFixed(1) + 's)';
+
+      // Continuă până când backend-ul ne spune că s-a terminat
+      // (wateringPort revine la -1 — detectat în render()), sau ca
+      // fallback până ajunge la 100 % + un mic delay de siguranţă.
+      if (doseActive) {
+        doseAnimTimer = requestAnimationFrame(tick);
+      }
+    }
+    doseAnimTimer = requestAnimationFrame(tick);
+  }
+
+  /** Apelată din render() când hub-ul confirmă finalul dozării. */
+  function onDoseComplete() {
+    if (!doseActive) return;
+    setDoseUiBusy(false);
+    el.waterStatus.textContent = 'Udare cu cantitate fixă finalizată.';
+    showDoseToast(
+      'Udare finalizată: Port ' + doseLastPort + ' · ' +
+      doseLastMl + ' ml.',
+      'ok'
+    );
+  }
+
+  /**
+   * Toast la baza ecranului — refoloseşte stilurile `.reset-toast` din
+   * nodes.css (clasă generică în ciuda numelui — apare şi pe resetare nod).
+   */
+  function showDoseToast(msg, kind) {
+    let t = document.getElementById('reset-toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'reset-toast';
+      t.className = 'reset-toast';
+      document.body.appendChild(t);
+    }
+    t.dataset.kind = kind || 'ok';
+    const icon = (kind === 'error')
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        + 'stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" '
+        + 'aria-hidden="true"><path d="M6 6 l12 12 M18 6 L 6 18"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+        + 'stroke-width="3" stroke-linecap="round" stroke-linejoin="round" '
+        + 'aria-hidden="true"><path d="M5 12 l5 5 L 20 7"/></svg>';
+    t.innerHTML =
+      '<span class="reset-toast__icon">' + icon + '</span>' +
+      '<span class="reset-toast__text"></span>';
+    t.querySelector('.reset-toast__text').textContent = msg;
+    t.classList.add('reset-toast--show');
+    clearTimeout(showDoseToast._timer);
+    showDoseToast._timer = setTimeout(() => {
+      t.classList.remove('reset-toast--show');
+    }, 4500);
+  }
+
+  /** Toggle al UI-ului: butoane disabled + spinner + progress vizibil. */
+  function setDoseUiBusy(busy, statusText) {
+    doseActive = busy;
+    el.flow.dataset.doseActive = busy ? 'true' : 'false';
+    el.doseStart.disabled = busy;
+    el.dosePort.disabled = busy;
+    el.doseMl.disabled = busy;
+
+    if (busy) {
+      el.doseStart.innerHTML =
+        '<span class="btn-spinner" aria-hidden="true"></span>' +
+        '<span>' + (statusText || 'Se udă…') + '</span>';
+      el.doseProgress.hidden = false;
+      el.doseProgressFill.style.width = '0%';
+      el.doseProgressLabel.textContent = 'Trimite comanda…';
+    } else {
+      el.doseStart.innerHTML = '<span class="btn__label">Start udare</span>';
+      el.doseProgress.hidden = true;
+      if (doseAnimTimer) {
+        cancelAnimationFrame(doseAnimTimer);
+        doseAnimTimer = null;
+      }
+      doseExpectedTotalMs = 0;
+      doseStartMs = 0;
+    }
+  }
+
   // ---------- Polling stare hub ----------
 
   async function poll() {
@@ -142,11 +290,21 @@
     }
   }
 
+  // Urmărim wateringPort între cadre ca să detectăm tranziţia "se udă → idle"
+  // care semnalează finalul dozării.
+  let lastWateringPort = -1;
+
   /** Reflectă în UI starea raportată de hub. */
   function render(data) {
     const ports = data.ports || [];
     const wateringPort = (data.wateringPort === undefined)
       ? -1 : data.wateringPort;
+
+    // Dozare activă + hub-ul a ajuns la idle => terminat.
+    if (doseActive && lastWateringPort > 0 && wateringPort < 0) {
+      onDoseComplete();
+    }
+    lastWateringPort = wateringPort;
 
     // -- Toggle GPIO: pompă + valve --
     const pinValue = {
@@ -240,6 +398,7 @@
   /** Utilizatorul a confirmat — deblocăm tab-ul Control. */
   function acceptDisclaimer() {
     disclaimerAccepted = true;
+    try { sessionStorage.setItem(DISCLAIMER_KEY, 'true'); } catch (_) {}
     el.disclaimer.close();
     startPolling();
   }
@@ -292,6 +451,13 @@
       disclaimerAck: document.getElementById('disclaimer-ack'),
       disclaimerConfirm: document.getElementById('disclaimer-confirm'),
       disclaimerCancel: document.getElementById('disclaimer-cancel'),
+      // Udare cantitate fixă
+      dosePort: document.getElementById('dose-port'),
+      doseMl: document.getElementById('dose-ml'),
+      doseStart: document.getElementById('dose-start'),
+      doseProgress: document.getElementById('dose-progress'),
+      doseProgressFill: document.getElementById('dose-progress-fill'),
+      doseProgressLabel: document.getElementById('dose-progress-label'),
     };
 
     // ----- Dialogul de disclaimer -----
@@ -318,6 +484,9 @@
       const btn = document.getElementById('water-' + port);
       if (btn) btn.addEventListener('click', () => toggleWater(port));
     });
+
+    // Listener pe butonul de udare cu cantitate fixă.
+    if (el.doseStart) el.doseStart.addEventListener('click', startDose);
 
     // Pornim polling-ul doar când tab-ul Control e activ — altfel
     // consumăm inutil cereri către hub. dashboard.js emite evenimentul.

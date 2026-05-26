@@ -36,13 +36,12 @@ _MOCK_HANDSHAKE_S = 15.0
 
 def _mock_sensors(node_name: str) -> dict:
     """
-    Cele 5 valori de la senzori, simulate per NUME NOD (stabile între
+    Cele 4 valori de la senzori, simulate per NUME NOD (stabile între
     polluri — un acelaşi nod = aceeaşi valoare la fiecare /status). În
     modul real vor veni din EEPROM/RAM-ul hub-ului, populate prin ESP-NOW.
 
-    Câmpurile sunt cele din experimentul nostru (vezi misc/soil_data_complete.csv):
+    Câmpuri:
       - soil_moisture_pct   : umiditate sol, % (convertită din RAW)
-      - soil_temp_c         : temperatură sol, °C
       - air_temp_c          : temperatură aer, °C
       - air_humidity_pct    : umiditate aer, %
       - lux                 : lumină ambient, lx
@@ -55,7 +54,6 @@ def _mock_sensors(node_name: str) -> dict:
     lux_value = None if node_name == "P3" else round(120.0 + (seed * 13 % 1880))
     return {
         "soil_moisture_pct":  round(35.0 + (seed * 7  % 41), 1),  # 35–75 %
-        "soil_temp_c":        round(19.0 + (seed * 3  % 5),  1),  # 19–24 °C
         "air_temp_c":         round(20.0 + (seed * 11 % 6),  1),  # 20–26 °C
         "air_humidity_pct":   round(42.0 + (seed * 5  % 22), 1),  # 42–64 %
         "lux":                lux_value,                          # 120–2000 lx sau None pe P3
@@ -317,6 +315,104 @@ def api_hub_toggle(pin):
     try:
         r = requests.get(f"http://{hub_ip}/toggle/{pin}", timeout=1.5,
                          headers=auth.hub_headers())
+        return jsonify(r.json()), r.status_code
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@bp.route("/api/hub/forget", methods=["POST"])
+@login_required
+def api_hub_forget():
+    """
+    "Deconectează şi uită" — şterge credenţialele WiFi de pe hub, reboot
+    automat în mod provisioning, şi curăţă starea locală (IP, SSID,
+    provisioned). După aceea, dashboard-ul revine la pasul de scanare BLE.
+
+    IMPORTANT: cleanup-ul local se face DOAR după ce hub-ul a confirmat
+    cu 200 — altfel UI-ul ar afişa "succes" chiar dacă comanda n-a ajuns.
+    În mock: nu există hub fizic, curăţăm direct.
+    """
+    from core import save_state
+
+    state = load_state()
+    hub_ip = state["hub"].get("ip")
+
+    if nodes.get_hub_mode() != "mock":
+        if not hub_ip:
+            return jsonify({"error": "hub_ip_not_set"}), 503
+        if requests is None:
+            return jsonify({"error": "requests_not_installed"}), 500
+        try:
+            # POST /reset pe firmware — handleResetProvisioning verifică
+            # codul de acces, şterge NVS şi face ESP.restart(). Răspunde
+            # 200 ÎNAINTE de reboot (vezi hub_http.ino).
+            r = requests.post(
+                f"http://{hub_ip}/reset",
+                headers=auth.hub_headers(),
+                timeout=4,
+            )
+        except requests.RequestException as e:
+            # Hub-ul nu a confirmat — NU facem cleanup local.
+            return jsonify({
+                "error": f"Hub-ul nu răspunde ({e})."
+            }), 502
+        if r.status_code != 200:
+            # 404 = cod de acces gresit; 500 = alta eroare.
+            return jsonify({
+                "error": f"Hub-ul a refuzat comanda (HTTP {r.status_code})."
+            }), 502
+
+    # Hub-ul a confirmat (sau suntem în mock) — acum putem face cleanup.
+    state["hub"]["ip"] = None
+    state["hub"]["ssid"] = None
+    state["hub"]["provisioned"] = False
+    save_state(state)
+    # Invalidăm cache-ul de config noduri — datele vechi nu mai au sens.
+    _invalidate_all_node_cfg_cache()
+    return jsonify({"ok": True})
+
+
+@bp.route("/api/hub/dose/<int:port>", methods=["POST"])
+@login_required
+def api_hub_dose(port):
+    """
+    Udare cu cantitate fixă pe un port — pentru testare/calibrare. Hub-ul
+    întoarce 200 imediat cu durata estimată (ms); UI-ul detectează finalul
+    prin polling pe /api/hub/status (wateringPort revine la -1).
+
+    Body: {"ml": 50}
+    """
+    if port < 1 or port > 3:
+        return jsonify({"error": "invalid port"}), 400
+    from flask import request
+    payload = request.get_json(silent=True) or {}
+    ml = int(payload.get("ml") or 0)
+    if ml < 1 or ml > 500:
+        return jsonify({"error": "ml out of range (1..500)"}), 400
+
+    if nodes.get_hub_mode() == "mock":
+        # Mock: calculăm durata cu acelaşi debit ca firmware-ul (3.21 ml/s).
+        dose_ms = int(ml * 1000 / 3.21)
+        total_ms = 2000 + dose_ms + 1000  # valve open + dose + pump stop
+        return jsonify({
+            "status": "dosing",
+            "port": port, "ml": ml,
+            "dose_ms": dose_ms,
+            "total_ms": total_ms,
+            "mock": True,
+        })
+
+    state = load_state()
+    hub_ip = state["hub"].get("ip")
+    if not hub_ip or requests is None:
+        return jsonify({"error": "hub_unavailable"}), 503
+    try:
+        r = requests.post(
+            f"http://{hub_ip}/dose/{port}",
+            params={"ml": ml},
+            headers=auth.hub_headers(),
+            timeout=4,
+        )
         return jsonify(r.json()), r.status_code
     except requests.RequestException as e:
         return jsonify({"error": str(e)}), 502

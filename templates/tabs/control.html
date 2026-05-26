@@ -82,6 +82,53 @@
           </div>
         </div>
 
+        {# ---- Secţiunea A2: Udare cu cantitate fixă ----
+           Pentru testare/calibrare: alegi portul + ml + Start. Pompa se
+           opreşte automat după durata calculată din debit. Toate
+           comenzile manuale sunt blocate pe durata dozării. #}
+        <div class="panel">
+          <div class="panel__header">
+            <div>
+              <h2 class="panel__title">Udare cantitate fixă</h2>
+              <p class="panel__subtitle">
+                Test de calibrare — porneşte o udare cu volum exact pe un port.
+              </p>
+            </div>
+          </div>
+
+          <div class="dose-form">
+            <div class="dose-form__row">
+              <label class="dose-form__label" for="dose-port">Port</label>
+              <select id="dose-port" class="dose-form__select">
+                <option value="1">Port 1</option>
+                <option value="2">Port 2</option>
+                <option value="3">Port 3</option>
+              </select>
+            </div>
+            <div class="dose-form__row">
+              <label class="dose-form__label" for="dose-ml">Cantitate</label>
+              <div class="dose-form__input-wrap">
+                <input type="number" id="dose-ml" class="dose-form__input"
+                       min="1" max="500" step="1" value="50" />
+              </div>
+            </div>
+            <span class="dose-form__unit">ml</span>
+            <button type="button" id="dose-start" class="btn btn--primary dose-form__start">
+              <span class="btn__label">Start udare</span>
+            </button>
+          </div>
+
+          {# Progress bar simulat — apare doar cât timp dozează. #}
+          <div id="dose-progress" class="dose-progress" hidden>
+            <div class="dose-progress__bar">
+              <div class="dose-progress__fill" id="dose-progress-fill"></div>
+            </div>
+            <p class="dose-progress__label" id="dose-progress-label">
+              Se pregăteşte…
+            </p>
+          </div>
+        </div>
+
         {# ---- Secţiunea B: Udare per port + diagramă hidraulică ---- #}
         <div class="panel">
           <div class="panel__header">
