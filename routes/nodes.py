@@ -264,7 +264,6 @@ def _mock_history(node_name: str) -> dict:
         # Udare simulată în jurul orei 9 → bump
         if hr == 9: moist += 20
 
-        soil_temp = 21.0 + 2.0 * diurnal + ((seed + i) % 3) * 0.3
         air_temp  = 22.0 + 4.0 * diurnal + ((seed * 3 + i) % 3) * 0.3
         air_hum   = 55.0 - 12.0 * diurnal + ((seed + i * 2) % 5)
         # Lux: doar ziua (6-20), parabolic, vârf la 13.
@@ -276,7 +275,6 @@ def _mock_history(node_name: str) -> dict:
         samples.append({
             "ts": ts,
             "soil_moisture_pct":  round(max(15.0, min(95.0, moist)), 1),
-            "soil_temp_c":        round(soil_temp, 1),
             "air_temp_c":         round(air_temp, 1),
             "air_humidity_pct":   round(max(20.0, min(90.0, air_hum)), 1),
             "lux":                round(lux),

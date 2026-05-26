@@ -579,14 +579,13 @@
 
   // ---------- Senzori (afişaţi pe cardurile din tab-ul Monitor) ----------
   //
-  // Hub-ul trimite 5 valori per nod în pachetul `/status`:
-  //   soil_moisture_pct, soil_temp_c, air_temp_c, air_humidity_pct, lux
+  // Hub-ul trimite 4 valori per nod în pachetul `/status`:
+  //   soil_moisture_pct, air_temp_c, air_humidity_pct, lux
   // Cât timp datele sunt mock, valorile sunt deterministe per nume nod.
 
   // Definiţia rândurilor: eticheta + cheia din JSON + unitate + zecimale.
   const SENSOR_ROWS = [
     { key: 'soil_moisture_pct', label: 'Umiditate sol',  unit: '%',  dec: 1 },
-    { key: 'soil_temp_c',       label: 'Temp. sol',      unit: '°C', dec: 1 },
     { key: 'air_temp_c',        label: 'Temp. aer',      unit: '°C', dec: 1 },
     { key: 'air_humidity_pct',  label: 'Umiditate aer',  unit: '%',  dec: 1 },
     { key: 'lux',               label: 'Lumină',         unit: 'lx', dec: 0 },
@@ -885,7 +884,6 @@
   const GRAPH_METRICS = {
     soil_moisture_pct: { unit: '%',  color: 'rgba(184,240,201,1)' },
     lux:               { unit: 'lx', color: 'rgba(255,204,102,1)' },
-    soil_temp_c:       { unit: '°C', color: 'rgba(180,140,255,1)' },
     air_temp_c:        { unit: '°C', color: 'rgba(140,200,255,1)' },
     air_humidity_pct:  { unit: '%',  color: 'rgba(255,160,200,1)' },
   };
@@ -1192,7 +1190,7 @@
 
     const header = [
       'timestamp', 'datetime',
-      'soil_moisture_pct', 'soil_temp_c',
+      'soil_moisture_pct',
       'air_temp_c', 'air_humidity_pct', 'lux',
     ];
     const rows = [header.join(',')];
@@ -1205,7 +1203,7 @@
         pad(d.getSeconds());
       rows.push([
         s.ts, datetime,
-        s.soil_moisture_pct, s.soil_temp_c,
+        s.soil_moisture_pct,
         s.air_temp_c, s.air_humidity_pct, s.lux,
       ].join(','));
     }
