@@ -34,7 +34,7 @@ import node_config as nodes   # pentru get_hub_mode()
 
 # Codul de acces folosit în modul mock (fără hardware).
 # În modul real, codul corect e cel din firmware-ul hub-ului.
-TEST_ACCESS_CODE = "284095"
+TEST_ACCESS_CODE = "1234"
 
 # Numele cookie-ului în care browserul ţine codul de acces.
 ACCESS_COOKIE = "dropwise_code"
