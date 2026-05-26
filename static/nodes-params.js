@@ -89,6 +89,7 @@
     if (window.Dropwise.activateTab) window.Dropwise.activateTab('nodes');
     hide(el.nodesHeader);
     hide(el.nodesGrid);
+    hide(el.nodesHistorySection);
     hide(el.wizard);
     hide(el.nodeStats);
     show(el.nodeParams);
@@ -125,6 +126,7 @@
     hide(el.nodeParams);
     show(el.nodesHeader);
     show(el.nodesGrid);
+    if (nodes.renderNodesHistory) nodes.renderNodesHistory();
     setEditMode(false);
     nodes.pollNodesGrid();
   }

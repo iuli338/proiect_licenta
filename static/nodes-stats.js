@@ -82,6 +82,7 @@
     hide(el.nodeParams);
     show(el.nodesHeader);
     show(el.nodesGrid);
+    if (nodes.renderNodesHistory) nodes.renderNodesHistory();
   }
 
   // ============================================================
@@ -101,6 +102,7 @@
     if (window.Dropwise.activateTab) window.Dropwise.activateTab('nodes');
     hide(el.nodesHeader);
     hide(el.nodesGrid);
+    hide(el.nodesHistorySection);
     hide(el.wizard);
     hide(el.nodeParams);
     show(el.nodeStats);
@@ -163,6 +165,7 @@
     hide(el.nodeStats);
     show(el.nodesHeader);
     show(el.nodesGrid);
+    if (nodes.renderNodesHistory) nodes.renderNodesHistory();
     // Invalidăm cache-ul — următoarea deschidere face fetch fresh.
     statsCache = null;
     nodes.pollNodesGrid();

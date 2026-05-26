@@ -14,6 +14,14 @@
          cardurile se ascund şi apare wizardul. #}
       <div id="nodes-grid" class="node-grid"></div>
 
+      {# Istoric — noduri conectate anterior, păstrate în localStorage.
+         Containerul + titlul sunt vizibile DOAR când istoricul are
+         măcar un element (toggle în nodes-grid.js renderHistory). #}
+      <section id="nodes-history-section" class="nodes-history" hidden>
+        <h2 class="nodes-history__title">Noduri conectate anterior</h2>
+        <div id="nodes-history-grid" class="node-grid"></div>
+      </section>
+
       {# Wizardul. data-step controlează pasul vizibil. #}
       <div id="wizard" class="wizard" data-step="plant" hidden>
 

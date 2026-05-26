@@ -75,6 +75,7 @@
     hide(el.nodeParams);
     show(el.nodesHeader);
     show(el.nodesGrid);
+    if (nodes.renderNodesHistory) nodes.renderNodesHistory();
 
     let loader = document.getElementById('reconfig-loader');
     if (!loader) {
@@ -90,6 +91,7 @@
     loader.querySelector('strong').textContent = nodeName;
     loader.hidden = false;
     hide(el.nodesGrid);
+    hide(el.nodesHistorySection);
   }
 
   function hideReconfigLoader() {
@@ -113,6 +115,7 @@
       err.querySelector('button').addEventListener('click', () => {
         err.hidden = true;
         show(el.nodesGrid);
+    if (nodes.renderNodesHistory) nodes.renderNodesHistory();
         if (window.location.hash !== '#nodes') {
           history.replaceState(null, '', '#nodes');
         }
@@ -124,6 +127,7 @@
       `şi reîncearcă.`;
     err.hidden = false;
     hide(el.nodesGrid);
+    hide(el.nodesHistorySection);
   }
 
   /** Afişează wizardul: ascunde grila, construieşte paşii, setează titlul. */
@@ -132,6 +136,7 @@
     if (window.Dropwise.activateTab) window.Dropwise.activateTab('nodes');
     hide(el.nodesHeader);
     hide(el.nodesGrid);
+    hide(el.nodesHistorySection);
     show(el.wizard);
     hide(el.wizardError);
     el.wizardNodeName.textContent = nodeName;
@@ -165,6 +170,7 @@
     hide(el.wizard);
     show(el.nodesHeader);
     show(el.nodesGrid);
+    if (nodes.renderNodesHistory) nodes.renderNodesHistory();
     nodes.pollNodesGrid();
   };
 

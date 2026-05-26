@@ -91,6 +91,8 @@
       nodeGrid: document.getElementById('node-grid'),       // grila Monitor
       nodesGrid: document.getElementById('nodes-grid'),     // grila Noduri
       nodesHeader: document.getElementById('nodes-header'), // antet tab
+      nodesHistorySection: document.getElementById('nodes-history-section'),
+      nodesHistoryGrid: document.getElementById('nodes-history-grid'),
       hubCard: document.getElementById('hub-card'),         // card stare hub
       wizard: document.getElementById('wizard'),
       wizardNodeName: document.getElementById('wizard-node-name'),
@@ -121,6 +123,10 @@
     if (nodes.initWizard) nodes.initWizard();
     if (nodes.initStats) nodes.initStats();
     if (nodes.initParams) nodes.initParams();
+
+    // Randează istoricul o dată la încărcare — pentru tab-ul Noduri, ca să
+    // apară chiar şi când hub-ul e offline / fără cod de acces.
+    if (nodes.renderNodesHistory) nodes.renderNodesHistory();
 
     // ---- Polling pe tabul activ ----
     window.addEventListener('dropwise:tab-activated', (ev) => {
