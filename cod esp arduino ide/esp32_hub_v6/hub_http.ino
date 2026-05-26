@@ -61,10 +61,70 @@ void handleWaterStart() {
     return;
   }
 
-  startWatering(port);
+  startWatering(port, 0);   // ml=0 => udare manuală nelimitată
 
   String json = "{\"status\":\"watering\",\"port\":";
   json += port + 1;
+  json += "}";
+  server.send(200, "application/json", json);
+}
+
+// POST /dose/<port>?ml=<ml> — porneşte o udare cu cantitate fixă pe portul
+// specificat. NU cere portConfirmed (e endpoint de test/calibrare — trebuie
+// să meargă şi cu nodul deconectat). Răspunde 200 imediat cu duraţa
+// estimată (ms). Pompa se opreşte automat după acea durată; UI-ul
+// detectează asta prin polling pe /status (wateringPort revine la -1).
+void handleDose() {
+
+  if (!checkAccessCode()) return;   // cod lipsa/gresit => 404
+  sendCorsHeaders();
+
+  // Port: parsate din URI ("/dose/1"); ml: argument query "?ml=50".
+  int port = parsePortFromUri(server.uri(), "/dose/");
+  if (port < 0) {
+    server.send(400, "application/json", "{\"error\":\"invalid port\"}");
+    return;
+  }
+  if (!server.hasArg("ml")) {
+    server.send(400, "application/json",
+      "{\"error\":\"missing ?ml=<n>\"}");
+    return;
+  }
+  int mlArg = server.arg("ml").toInt();
+  if (mlArg < 1 || mlArg > 500) {
+    server.send(400, "application/json",
+      "{\"error\":\"ml out of range (1..500)\"}");
+    return;
+  }
+  int portArg = port + 1;
+
+  // Lock: orice udare în curs (manuală sau dose) blochează un nou start.
+  if (wateringPhase != PHASE_IDLE) {
+    server.send(409, "application/json",
+      "{\"error\":\"watering already active\"}");
+    return;
+  }
+  // Lock: pompa pornită manual prin /toggle/16 blochează dozarea.
+  if (pumpOn) {
+    server.send(409, "application/json",
+      "{\"error\":\"pump is on manually\"}");
+    return;
+  }
+
+  startWatering(port, (uint16_t)mlArg);
+
+  // Durata totală estimată (ms): valve open delay + dose duration + pump stop delay.
+  unsigned long doseMs = (unsigned long)(mlArg * 1000UL / PUMP_FLOW_ML_PER_SEC);
+  unsigned long totalMs = VALVE_OPEN_DELAY + doseMs + PUMP_STOP_DELAY;
+
+  String json = "{\"status\":\"dosing\",\"port\":";
+  json += portArg;
+  json += ",\"ml\":";
+  json += mlArg;
+  json += ",\"dose_ms\":";
+  json += doseMs;
+  json += ",\"total_ms\":";
+  json += totalMs;
   json += "}";
   server.send(200, "application/json", json);
 }
@@ -155,7 +215,6 @@ void handleStatus() {
     json += ",\"sensors\":";
     if (portConfirmed[i] && portSensors[i].lastUpdateMs > 0) {
       json += "{\"soil_moisture_pct\":"; json += jsonFloat(portSensors[i].soilMoisturePct, 1);
-      json += ",\"soil_temp_c\":";        json += jsonFloat(portSensors[i].soilTempC,       1);
       json += ",\"air_temp_c\":";         json += jsonFloat(portSensors[i].airTempC,        1);
       json += ",\"air_humidity_pct\":";   json += jsonFloat(portSensors[i].airHumidityPct,  1);
       json += ",\"lux\":";                json += jsonFloat(portSensors[i].lux,             0);
@@ -281,7 +340,10 @@ void handleSetTime() {
 }
 
 // Sterge credentialele la cerere de la dashboard (reset de la distanta).
+// Cere cod de acces — la fel ca restul endpoint-urilor private — ca să nu
+// poată reseta cineva din reţea fără autentificare.
 void handleResetProvisioning() {
+  if (!checkAccessCode()) return;   // cod lipsa/gresit => 404
   sendCorsHeaders();
   clearCredentials();
   server.send(200, "application/json",

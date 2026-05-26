@@ -1,22 +1,20 @@
 /* ============================================================
    Dropwise NODE — firmware ESP32 (v4)
 
-   Nodul-senzor: citeşte 5 valori (umiditate sol, temperatură sol,
-   temperatură aer, umiditate aer, luminozitate) şi le trimite la
-   hub prin ESP-NOW la fiecare 5 secunde. Hub-ul le agregă şi le
-   expune dashboard-ului în /status.
+   Nodul-senzor: citeşte 4 valori (umiditate sol, temperatură aer,
+   umiditate aer, luminozitate) şi le trimite la hub prin ESP-NOW
+   la fiecare 5 secunde. Hub-ul le agregă şi le expune dashboard-ului
+   în /status.
 
    Sensori (toţi opţionali — la pornire fiecare e ping-uit, dacă
    lipseşte va trimite NAN la hub):
      • SHT40   I²C 0x44  — temperatură + umiditate aer
      • BH1750  I²C 0x23  — luminozitate (lux)
-     • DS18B20 OneWire   — temperatură sol
      • Sol analog GPIO34 — umiditate sol (% după calibrare)
 
    Pini:
      • GPIO 21 = SDA (I²C — partajat SHT40/BH1750)
      • GPIO 22 = SCL
-     • GPIO  4 = OneWire DS18B20
      • GPIO 34 = analog umiditate sol (ADC1_CH6)
      • GPIO 26 = power gate pentru senzorul de sol (HIGH = alimentat)
      • GPIO  2 = LED stare (confirmare hub)
@@ -30,15 +28,12 @@
 
 // Senzori
 #include <BH1750.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
 #include <SensirionI2cSht4x.h>
 
 // Schimba aici pentru fiecare nod ("P1", "P2", "P3")
-#define NODE_NAME "P1"
+#define NODE_NAME "P2"
 
 #define LED_PIN          2
-#define ONEWIRE_PIN      4
 #define SOIL_POWER_PIN   26
 #define SOIL_MOISTURE_PIN 34
 
@@ -70,12 +65,13 @@ typedef struct {
 } EspNowMessage;
 
 // Mesaj cu citiri senzori — trimis periodic. NAN denotă senzor absent
-// (hub-ul îl serializează ca `null` în JSON).
+// (hub-ul îl serializează ca `null` în JSON). Câmpul `reserved` ţine
+// dimensiunea fixă la 40 B după scoaterea senzorului DS18B20.
 typedef struct __attribute__((packed)) {
   char     msgType[8];      // "SENSE"
   char     nodeName[8];     // "P1"/"P2"/"P3"
   float    soilMoisturePct; // 0..100
-  float    soilTempC;
+  float    reserved;        // ex-soilTempC (DS18B20 eliminat)
   float    airTempC;
   float    airHumidityPct;
   float    lux;
@@ -98,8 +94,6 @@ bool ledState = false;
 // ---------- Drivere senzori ----------
 
 BH1750 bh1750;
-OneWire oneWire(ONEWIRE_PIN);
-DallasTemperature ds18b20(&oneWire);
 SensirionI2cSht4x sht40;
 
 // Disponibilitate detectată la boot — recheck la fiecare citire NU se face
@@ -107,7 +101,6 @@ SensirionI2cSht4x sht40;
 // trimite NAN pentru el oricum, fiindcă apelul lui va eşua).
 bool hasSht40   = false;
 bool hasBh1750  = false;
-bool hasDs18b20 = false;
 bool hasSoil    = true;   // ADC e mereu disponibil pe ESP32
 
 // ---------- Init senzori ----------
@@ -131,20 +124,6 @@ bool initBh1750() {
     return false;
   }
   Serial.println("BH1750: OK");
-  return true;
-}
-
-bool initDs18b20() {
-  ds18b20.begin();
-  int count = ds18b20.getDeviceCount();
-  if (count == 0) {
-    Serial.println("DS18B20: lipsa (0 dispozitive pe bus)");
-    return false;
-  }
-  Serial.print("DS18B20: OK ("); Serial.print(count); Serial.println(" dispozitive)");
-  // 9 biţi e suficient pentru sol (~0.5 °C, conversie rapidă ~94 ms).
-  ds18b20.setResolution(9);
-  ds18b20.setWaitForConversion(true);   // simplitate — blocant
   return true;
 }
 
@@ -183,15 +162,6 @@ float readSoilMoisturePct() {
   Serial.print("Sol raw="); Serial.print(raw);
   Serial.print(" -> "); Serial.print(pct, 1); Serial.println("%");
   return pct;
-}
-
-float readSoilTempC() {
-  if (!hasDs18b20) return NAN;
-  ds18b20.requestTemperatures();
-  float t = ds18b20.getTempCByIndex(0);
-  // Driver-ul întoarce DEVICE_DISCONNECTED_C (-127) când senzorul cade.
-  if (t <= -100.0f) return NAN;
-  return t;
 }
 
 bool readSht40(float& airTempC, float& airHumidityPct) {
@@ -296,8 +266,8 @@ void sendSensorReadings() {
   strcpy(msg.msgType,  "SENSE");
   strcpy(msg.nodeName, NODE_NAME);
 
-  msg.soilMoisturePct = hasSoil    ? readSoilMoisturePct() : NAN;
-  msg.soilTempC       = hasDs18b20 ? readSoilTempC()       : NAN;
+  msg.soilMoisturePct = hasSoil ? readSoilMoisturePct() : NAN;
+  msg.reserved        = NAN;       // ex-soilTempC (DS18B20 eliminat)
 
   float airT = NAN, airH = NAN;
   readSht40(airT, airH);
@@ -315,9 +285,7 @@ void sendSensorReadings() {
 
   Serial.print("SENSE sent | sol=");
   Serial.print(isnan(msg.soilMoisturePct) ? -1 : msg.soilMoisturePct);
-  Serial.print("% solT=");
-  Serial.print(isnan(msg.soilTempC) ? -1 : msg.soilTempC);
-  Serial.print("C aerT=");
+  Serial.print("% aerT=");
   Serial.print(isnan(msg.airTempC) ? -1 : msg.airTempC);
   Serial.print("C aerH=");
   Serial.print(isnan(msg.airHumidityPct) ? -1 : msg.airHumidityPct);
@@ -390,13 +358,11 @@ void setup() {
   // marcăm flag-ul ca false şi vom trimite NAN.
   hasSht40   = initSht40();
   hasBh1750  = initBh1750();
-  hasDs18b20 = initDs18b20();
   initSoilSensor();
 
   Serial.print("Sensori OK: ");
   if (hasSht40)   Serial.print("SHT40 ");
   if (hasBh1750)  Serial.print("BH1750 ");
-  if (hasDs18b20) Serial.print("DS18B20 ");
   if (hasSoil)    Serial.print("SOL ");
   Serial.println();
 

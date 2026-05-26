@@ -55,6 +55,29 @@ static double jsonNum(const String& body, const char* key, double defaultVal) {
   return body.substring(p, end).toDouble();
 }
 
+// Mapează un nume de clasă de udare (string JSON) la enum 0..4. Folosit la
+// parsing JSON la POST /node/P1/config. Returnează `defaultVal` dacă lipseşte
+// sau e necunoscut.
+static const char* WATERING_CLASS_NAMES[] = {
+  "foarte_rar", "rar", "echilibrat", "frecvent", "zilnic"
+};
+#define WATERING_CLASS_COUNT 5
+
+static uint8_t parseWateringClass(const String& body, uint8_t defaultVal) {
+  String s = jsonStr(body, "watering_class");
+  if (s.length() == 0) return defaultVal;
+  for (uint8_t i = 0; i < WATERING_CLASS_COUNT; i++) {
+    if (s == WATERING_CLASS_NAMES[i]) return i;
+  }
+  return defaultVal;
+}
+
+// Inversul lui parseWateringClass — folosit la serializare la GET.
+static const char* wateringClassName(uint8_t v) {
+  if (v < WATERING_CLASS_COUNT) return WATERING_CLASS_NAMES[v];
+  return WATERING_CLASS_NAMES[2];   // fallback "echilibrat"
+}
+
 // ---------- Identificare nume nod din URI ----------
 //
 // URI-uri de forma /node/P1/config -> "P1". Numele nodului e identitatea sa
@@ -135,6 +158,8 @@ static String buildNodeJson(const char* nodeName, const NodeConfig& cfg,
   json += "\"id\":\"";    json += escapeJson(cfg.plantId);   json += "\",";
   json += "\"name\":\"";  json += escapeJson(cfg.plantName); json += "\",";
   json += "\"water_need\":\""; json += waterNeedStr(cfg.waterNeed); json += "\",";
+  json += "\"watering_class\":\""; json += wateringClassName(rp.wateringClass);
+  json += "\",";
   json += "\"custom\":";  json += (cfg.plantCustom ? "true" : "false");
   json += "}";
 
@@ -159,6 +184,12 @@ static String buildNodeJson(const char* nodeName, const NodeConfig& cfg,
   json += ",\"Ki\":";           json += String(rp.Ki, 4);
   json += ",\"min_interval_min\":"; json += rp.minIntervalMin;
   json += ",\"dose_estimat_ml\":";  json += rp.doseEstimatMl;
+  // NOU (LAYOUT_VERSION 5) — clasa de udare:
+  json += ",\"watering_class\":\""; json += wateringClassName(rp.wateringClass);
+  json += "\"";
+  json += ",\"T_min_min\":";        json += rp.tMinMin;
+  json += ",\"target_dose_ml\":";   json += rp.targetDoseMl;
+  json += ",\"safety_max_min\":";   json += rp.safetyMaxMin;
   json += "}";
 
   // stats
@@ -279,6 +310,13 @@ void handleNodePost() {
   rp.hysteresis10   = (uint16_t)(jsonNum(body, "hysteresis", rp.hysteresis10 / 10.0) * 10.0);
   rp.minIntervalMin = (uint16_t)jsonNum(body, "min_interval_min", rp.minIntervalMin);
   rp.doseEstimatMl  = (uint16_t)jsonNum(body, "dose_estimat_ml",  rp.doseEstimatMl);
+  // --- NOU (clasa de udare, LAYOUT_VERSION 5) ---
+  rp.tMinMin        = (uint16_t)jsonNum(body, "T_min_min",        rp.tMinMin);
+  rp.targetDoseMl   = (uint16_t)jsonNum(body, "target_dose_ml",   rp.targetDoseMl);
+  rp.safetyMaxMin   = (uint16_t)jsonNum(body, "safety_max_min",   rp.safetyMaxMin);
+  // Clasa de udare vine ca string în JSON ("rar", "echilibrat" etc.).
+  // Mapăm la enum 0..4. Lipsă → păstrăm valoarea curentă din EEPROM.
+  rp.wateringClass = parseWateringClass(body, rp.wateringClass);
 
   // --- created_at: o singura data, la prima configurare ---
   uint32_t now = (uint32_t)(time(nullptr));   // 0 daca NTP nu e configurat

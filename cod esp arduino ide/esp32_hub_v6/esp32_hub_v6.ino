@@ -70,6 +70,11 @@
 #define VALVE_OPEN_DELAY  2000  // ms intre deschidere valva si pornire pompa
 #define PUMP_STOP_DELAY   1000  // ms intre oprire pompa si inchidere valva
 
+// Debitul pompei — calibrat empiric pe banc (3 măsurători de 100 ml fără
+// furtunul gol): media 3.21 ml/s. Folosit la conversia ml → durată
+// pompă în modul de udare cu cantitate fixă.
+#define PUMP_FLOW_ML_PER_SEC  3.21f
+
 // ---------- Provisioning: pini + constante ----------
 
 #define PIN_STATUS_LED  2   // LED-ul intern al placutei ESP32 DevKit
@@ -115,7 +120,7 @@
 // iniţializăm. La schimbarea layout-ului incrementăm versiunea.
 
 #define EEPROM_MAGIC              "DROPv01"   // 8 B (cu \0)
-#define EEPROM_LAYOUT_VERSION     4   // bump => re-init la urmatorul boot
+#define EEPROM_LAYOUT_VERSION     5   // bump => re-init la urmatorul boot
 
 #define EEPROM_OFFSET_HEADER      0x0000      // 32 B (resv 64 B pana la slot)
 #define EEPROM_OFFSET_CONFIG_P1   0x0040      // 128 B per port
@@ -139,7 +144,7 @@
 // Codul de acces al hub-ului. Este FIX, definit aici si imprimat pe cutie.
 // La conectarea din dashboard, utilizatorul introduce acest cod; hub-ul
 // confirma daca e corect, iar serverul il retine in sesiunea utilizatorului.
-#define HUB_ACCESS_CODE  "284095"
+#define HUB_ACCESS_CODE  "1234"
 
 // ---------- Stare globala ----------
 
@@ -192,6 +197,16 @@ enum WateringPhase {
 WateringPhase wateringPhase = PHASE_IDLE;
 unsigned long phaseStartTime = 0;
 
+// ---------- Udare cu cantitate fixă ("dose") ----------
+//
+// Modul "dose" e identic cu udarea normală, dar opreşte automat pompa
+// după o durată calculată din ml/debit. Foloseşte aceeaşi state machine
+// — singura diferenţă e că `doseDurationMs > 0` declanşează oprirea
+// din PHASE_PUMPING fără să aşteptăm un /water/stop manual.
+// `doseLastMl` reţine doza ultimă (folosit la finalizare pt. statistici).
+unsigned long doseDurationMs = 0;   // 0 = udare manuală (fără auto-stop)
+uint16_t      doseLastMl     = 0;
+
 uint8_t currentWifiChannel = 1;
 
 bool blinkState = false;
@@ -206,11 +221,13 @@ typedef struct {
 
 // Mesaj cu citiri senzori — primit periodic de la noduri (5 s tipic).
 // NAN denotă senzor absent; serializat în /status ca `null`.
+// Câmpul `reserved` păstrează dimensiunea istorică (40B) după eliminarea
+// senzorului DS18B20 de temperatură sol.
 typedef struct __attribute__((packed)) {
   char     msgType[8];           // "SENSE"
   char     nodeName[NAME_LEN];   // "P1"/"P2"/"P3"
   float    soilMoisturePct;      // 0..100 sau NAN
-  float    soilTempC;
+  float    reserved;             // ex-soilTempC (DS18B20 eliminat)
   float    airTempC;
   float    airHumidityPct;
   float    lux;
@@ -222,7 +239,6 @@ typedef struct __attribute__((packed)) {
 // afişează "—" pe toate câmpurile). Câmpurile NAN se serializează null.
 typedef struct {
   float         soilMoisturePct;
-  float         soilTempC;
   float         airTempC;
   float         airHumidityPct;
   float         lux;
@@ -270,18 +286,30 @@ typedef struct __attribute__((packed)) {
   uint8_t  reserved[15];
 } NodeConfig;                     // 128 B
 
-// 5×float + 4×uint16 = 28 B; reserved[36] => 64 B total.
+// 5×float + 4×uint16 (vechi) + 3×uint16 + 1×uint8 (NOU) = 35 B
+// reserved[29] => 64 B total.
+//
+// Câmpurile NOI vin din clasa de udare (vezi node_config._WATERING_CLASSES):
+//   wateringClass  — enum 0..4 (foarte_rar/rar/echilibrat/frecvent/zilnic)
+//   tMinMin        — interval minim între udări [min] (cadenţa biologică)
+//   targetDoseMl   — doza ţintă per udare [ml]
+//   safetyMaxMin   — max timp fără udare [min] (1.2× tMinMin)
 typedef struct __attribute__((packed)) {
   float    K;                     // %/ml — câştig proces
   float    tauH;                  // ore — constanta de uscare
-  float    lambdaH;               // ore — agresivitate IMC
+  float    lambdaH;               // ore — agresivitate IMC (din clasă)
   float    Kp;                    // ml / %eroare
   float    Ki;                    // ml / (%eroare · h)
   uint16_t setpoint10;            // setpoint × 10 (ex: 500 = 50.0%)
   uint16_t hysteresis10;          // hysteresis × 10
-  uint16_t minIntervalMin;
-  uint16_t doseEstimatMl;
-  uint8_t  reserved[36];
+  uint16_t minIntervalMin;        // = tMinMin (păstrat ca alias legacy)
+  uint16_t doseEstimatMl;         // = targetDoseMl (păstrat ca alias legacy)
+  // NOU (LAYOUT_VERSION 5):
+  uint8_t  wateringClass;         // 0=foarte_rar 1=rar 2=echilibrat 3=frecvent 4=zilnic
+  uint16_t tMinMin;               // interval minim între udări [min]
+  uint16_t targetDoseMl;          // doza ţintă per udare [ml]
+  uint16_t safetyMaxMin;          // max timp fără udare [min]
+  uint8_t  reserved[29];
 } RegParams;                      // 64 B
 
 // 5×uint32 + 1×uint16 + 1×uint8 = 23 B; reserved[41] => 64 B total.

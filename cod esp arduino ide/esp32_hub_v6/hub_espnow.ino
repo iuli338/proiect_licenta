@@ -105,10 +105,10 @@ void onDataRecv(const uint8_t *mac, const uint8_t *incomingData, int len) {
       int port = findPortForName(sm.nodeName);
       if (port >= 0 && portConfirmed[port]) {
         portSensors[port].soilMoisturePct = sm.soilMoisturePct;
-        portSensors[port].soilTempC       = sm.soilTempC;
         portSensors[port].airTempC        = sm.airTempC;
         portSensors[port].airHumidityPct  = sm.airHumidityPct;
         portSensors[port].lux             = sm.lux;
+        // sm.reserved ignorat (ex-soilTempC, DS18B20 eliminat).
         portSensors[port].lastUpdateMs    = millis();
         statsTouchLastSeen(sm.nodeName);
         Serial.print("SENSE primit de la ");

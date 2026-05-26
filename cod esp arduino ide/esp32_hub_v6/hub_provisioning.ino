@@ -296,6 +296,14 @@ void startNormalMode() {
     server.on(stopUri.c_str(),  HTTP_OPTIONS, handleOptions);
   }
 
+  // /dose/<port>?ml=<n> — udare cu cantitate fixă (tab Control).
+  for (int i = 1; i <= NUM_PORTS; i++) {
+    String doseUri = "/dose/" + String(i);
+    server.on(doseUri.c_str(), HTTP_POST,    handleDose);
+    server.on(doseUri.c_str(), HTTP_GET,     handleDose);
+    server.on(doseUri.c_str(), HTTP_OPTIONS, handleOptions);
+  }
+
   // /node/Pi/config + /node/Pi/stats + /node/Pi/forget — persistate în EEPROM.
   for (int i = 1; i <= NUM_PORTS; i++) {
     String cfgUri    = "/node/P" + String(i) + "/config";

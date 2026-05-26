@@ -8,10 +8,26 @@
 //  Watering (non-blocking state machine)
 // ============================================================
 
-void startWatering(int port) {
+// Porneşte o udare. `ml = 0` înseamnă udare manuală nelimitată (se opreşte
+// abia la /water/stop). `ml > 0` activează modul "dose": pompa se opreşte
+// automat după ml/PUMP_FLOW_ML_PER_SEC secunde.
+void startWatering(int port, uint16_t ml) {
 
   Serial.print("Starting watering on port ");
-  Serial.println(port + 1);
+  Serial.print(port + 1);
+  if (ml > 0) {
+    Serial.print(" cu doza ");
+    Serial.print(ml);
+    Serial.print(" ml (~");
+    Serial.print((uint32_t)(ml / PUMP_FLOW_ML_PER_SEC));
+    Serial.print(" s)");
+  }
+  Serial.println();
+
+  // Salvăm doza ca să o putem folosi la PHASE_PUMP_STOPPING (statistici)
+  // şi la calculul timeout-ului în PHASE_PUMPING.
+  doseLastMl     = ml;
+  doseDurationMs = (ml > 0) ? (unsigned long)(ml * 1000UL / PUMP_FLOW_ML_PER_SEC) : 0;
 
   // Deschide valva imediat
   digitalWrite(valvePin[port], HIGH);
@@ -44,11 +60,26 @@ void updateWateringStateMachine() {
 
     case PHASE_VALVE_OPENING:
       if (now - phaseStartTime >= VALVE_OPEN_DELAY) {
-        // Porneste pompa
+        // Porneste pompa — şi memorăm momentul (pentru auto-stop dose).
         digitalWrite(PIN_PUMP, HIGH);
         pumpOn = true;
         wateringPhase = PHASE_PUMPING;
+        phaseStartTime = now;
         Serial.println("Pump ON");
+      }
+      break;
+
+    case PHASE_PUMPING:
+      // Dacă suntem în mod "dose", oprim automat după durata calculată.
+      // Pentru udarea manuală (doseDurationMs == 0), aşteptăm /water/stop.
+      if (doseDurationMs > 0 && (now - phaseStartTime) >= doseDurationMs) {
+        Serial.print("Dose complete (");
+        Serial.print(doseLastMl);
+        Serial.println(" ml) — stopping pump");
+        digitalWrite(PIN_PUMP, LOW);
+        pumpOn = false;
+        wateringPhase = PHASE_PUMP_STOPPING;
+        phaseStartTime = now;
       }
       break;
 
@@ -65,14 +96,17 @@ void updateWateringStateMachine() {
         Serial.println("Watering stopped completely");
 
         // Înregistrăm udarea în statisticile EEPROM ale nodului.
-        // Doza livrată: o estimăm din `doseEstimatMl` salvat la
-        // configurare (aproximaţie până la regulator PI cu debitmetru).
+        // Pentru udarea cu cantitate fixă ("dose"), folosim ml-ii reali
+        // ceruţi. Pentru udare manuală nelimitată, fallback pe estimarea
+        // salvată în RegParams (până la regulator PI cu debitmetru).
         if (finishedPort >= 0 && portConfirmed[finishedPort]) {
           const char* name = portName[finishedPort];
-          RegParams rp;
-          uint16_t ml = 0;
-          if (storageLoadParams(name, rp)) {
-            ml = rp.doseEstimatMl;
+          uint16_t ml = doseLastMl;
+          if (ml == 0) {
+            RegParams rp;
+            if (storageLoadParams(name, rp)) {
+              ml = rp.doseEstimatMl;
+            }
           }
           if (statsRecordWatering(name, ml)) {
             Serial.print("Stats updated for ");
@@ -82,6 +116,9 @@ void updateWateringStateMachine() {
             Serial.println(" ml");
           }
         }
+        // Reset state pentru următoarea udare.
+        doseDurationMs = 0;
+        doseLastMl     = 0;
       }
       break;
 
