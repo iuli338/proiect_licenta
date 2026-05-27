@@ -543,6 +543,8 @@ class RealHub:
             "plant_name":   plant.get("name", ""),
             "water_need":   plant.get("water_need", "mediu"),
             "plant_custom": 1 if plant.get("custom") else 0,
+            "watering_class": plant.get("watering_class",
+                                       reg.get("watering_class", "echilibrat")),
             # soil
             "soil_id":      soil.get("id", ""),
             "soil_name":    soil.get("name", ""),
@@ -551,7 +553,7 @@ class RealHub:
             # color + meta
             "color":        config.get("color", "mint"),
             "created_at":   int(config.get("created_at") or 0),
-            # regulator
+            # regulator (clasic)
             "K":                model.get("K", 1.5),
             "tau_h":            model.get("tau_h", 31.7),
             "lambda_h":         reg.get("lambda_h", 30.0),
@@ -561,6 +563,17 @@ class RealHub:
             "hysteresis":       reg.get("hysteresis", 5),
             "min_interval_min": reg.get("min_interval_min", 1440),
             "dose_estimat_ml":  reg.get("dose_estimat_ml", 25),
+            # clasă de udare (LAYOUT_VERSION 5+) — firmware-ul foloseşte
+            # aceste câmpuri explicit pentru regulatorul automat.
+            "T_min_min":        reg.get("T_min_min",
+                                        reg.get("min_interval_min", 1440)),
+            "target_dose_ml":   reg.get("target_dose_ml",
+                                        reg.get("dose_estimat_ml", 25)),
+            "safety_max_min":   reg.get("safety_max_min",
+                                        int(reg.get("min_interval_min", 1440) * 1.2)),
+            # auto-watering flag (LAYOUT_VERSION 6). Default 0 la prima
+            # configurare; toggle separat prin POST /node/<P>/auto-watering.
+            "auto_watering_enabled": 1 if reg.get("auto_watering_enabled") else 0,
         }
 
         job.update(status="sending",
