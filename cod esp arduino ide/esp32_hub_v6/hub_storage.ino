@@ -114,12 +114,22 @@ bool storageInit() {
   }
 
   Serial.println("EEPROM layout absent — initializez slot-urile");
+  bootLogf("EEPROM layout absent — zeroizez slot-urile\n");
 
   // Zeroize toate slot-urile.
   for (int s = 0; s < NUM_PORTS; s++) {
-    if (!zeroSlot(configOffset(s), NODE_CONFIG_SIZE)) return false;
-    if (!zeroSlot(paramsOffset(s), REG_PARAMS_SIZE))  return false;
-    if (!zeroSlot(statsOffset(s),  NODE_STATS_SIZE))  return false;
+    if (!zeroSlot(configOffset(s), NODE_CONFIG_SIZE)) {
+      bootLogf("storageInit: zeroSlot config P%d ESUAT\n", s + 1);
+      return false;
+    }
+    if (!zeroSlot(paramsOffset(s), REG_PARAMS_SIZE)) {
+      bootLogf("storageInit: zeroSlot params P%d ESUAT\n", s + 1);
+      return false;
+    }
+    if (!zeroSlot(statsOffset(s),  NODE_STATS_SIZE)) {
+      bootLogf("storageInit: zeroSlot stats P%d ESUAT\n", s + 1);
+      return false;
+    }
   }
 
   // Scriem header-ul ABIA la final — dacă init-ul cade la mijloc, la
@@ -127,9 +137,13 @@ bool storageInit() {
   memset(&h, 0, sizeof(h));
   memcpy(h.magic, EEPROM_MAGIC, 8);
   h.version = EEPROM_LAYOUT_VERSION;
-  if (!eepromWrite(EEPROM_OFFSET_HEADER, (uint8_t*)&h, sizeof(h))) return false;
+  if (!eepromWrite(EEPROM_OFFSET_HEADER, (uint8_t*)&h, sizeof(h))) {
+    bootLogf("storageInit: scriere header ESUATA\n");
+    return false;
+  }
 
   Serial.println("EEPROM layout initializat");
+  bootLogf("EEPROM layout initializat OK\n");
   return true;
 }
 

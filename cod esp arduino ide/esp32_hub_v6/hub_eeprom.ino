@@ -143,9 +143,11 @@ static void eepromTryRecover() {
   if (eepromPing()) {
     eepromReady = true;
     Serial.println("EEPROM recovered after bus reset");
+    bootLogf("EEPROM recuperat dupa bus reset\n");
   } else {
     eepromReady = false;
     Serial.println("EEPROM still unreachable after bus reset");
+    bootLogf("EEPROM NEcontactat dupa bus reset — esueaza I2C\n");
   }
 }
 
