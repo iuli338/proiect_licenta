@@ -125,22 +125,34 @@
     if (nodes.initParams) nodes.initParams();
 
     // Randează istoricul o dată la încărcare — pentru tab-ul Noduri, ca să
-    // apară chiar şi când hub-ul e offline / fără cod de acces.
-    if (nodes.renderNodesHistory) nodes.renderNodesHistory();
+    // apară chiar şi când hub-ul e offline / fără cod de acces. DAR sărim
+    // peste dacă hash-ul curent va deschide un sub-view (wizard, stats,
+    // params, graph) — altfel istoricul apare scurt apoi e ascuns,
+    // producând flicker la reload.
+    const hash = window.location.hash || '';
+    const opensSubView = /^#nodes\/P[123]\/(configure|reconfigure|stats|params)/.test(hash)
+                      || /^#monitor\/P[123]\/graph/.test(hash);
+    if (!opensSubView && nodes.renderNodesHistory) {
+      nodes.renderNodesHistory();
+    }
 
     // ---- Polling pe tabul activ ----
+    // IMPORTANT: applyNodesHash() trebuie să ruleze ÎNAINTE de
+    // startNodesPolling(). Polling-ul cheamă renderNodeGrid (sincron pe
+    // verificare, async pe fetch) — dacă rulează prima dată CÂND wizardul
+    // e încă hidden=true (înainte de applyNodesHash care îl deschide),
+    // fetch-ul async ajunge să randeze grila + istoric peste wizard,
+    // producând flicker.
     window.addEventListener('dropwise:tab-activated', (ev) => {
       const tab = ev.detail && ev.detail.tab;
       if (tab === 'monitor') {
-        nodes.startMonitorPolling();
         nodes.stopNodesPolling();
-        // Deschide pagina Grafice dacă hash-ul cere asta (deep-link).
+        nodes.startMonitorPolling();
         if (nodes.applyMonitorHash) nodes.applyMonitorHash();
       } else if (tab === 'nodes') {
         nodes.stopMonitorPolling();
-        nodes.startNodesPolling();
-        nodes.applyNodesHash();   // deschide wizard/statistici după hash
-        // Părăsim Monitor-ul → curăţăm pagina Grafice dacă era deschisă.
+        nodes.applyNodesHash();   // deschide wizard/stats/params ÎNTÂI
+        nodes.startNodesPolling(); // apoi pornim polling-ul
         if (nodes.closeGraphViewIfOpen) nodes.closeGraphViewIfOpen();
       } else {
         nodes.stopMonitorPolling();
@@ -162,8 +174,9 @@
       if (nodes.applyMonitorHash) nodes.applyMonitorHash();
     }
     if (nodesPanel.dataset.active === 'true') {
-      nodes.startNodesPolling();
+      // Aceeaşi ordine ca mai sus: hash ÎNAINTE de polling.
       nodes.applyNodesHash();
+      nodes.startNodesPolling();
     }
   }
 

@@ -214,8 +214,16 @@
   /** Poll pentru grila de pe tabul Noduri (când wizardul NU e deschis). */
   nodes.pollNodesGrid = async function () {
     const el = nodes.el;
-    // Cât timp wizardul sau statisticile sunt deschise, grila e ascunsă.
+    // Cât timp un sub-view e deschis (wizard, statistici, parametri,
+    // loader/eroare de reconfigurare), grila + istoricul rămân ascunse —
+    // sărim peste poll ca să evităm race-condition (renderEm grila peste
+    // un loader şi apoi se ascunde din nou → flicker).
     if (!el.wizard.hidden || !el.nodeStats.hidden) return;
+    if (el.nodeParams && !el.nodeParams.hidden) return;
+    const reconfigLoader = document.getElementById('reconfig-loader');
+    if (reconfigLoader && !reconfigLoader.hidden) return;
+    const reconfigError = document.getElementById('reconfig-error');
+    if (reconfigError && !reconfigError.hidden) return;
     if (!canPoll()) return;
     try {
       const j = await getJSON('/api/hub/status', { cache: 'no-store' });
@@ -291,6 +299,8 @@
       card.querySelector('.node-card__cfg').hidden = true;
       const gb = card.querySelector('.node-card__graph');
       if (gb) gb.hidden = true;
+      const auto = card.querySelector('.node-card__auto');
+      if (auto) { auto.hidden = true; delete auto.dataset.snap; }
       card.querySelector('.node-card__handshake').hidden = true;
       card.style.removeProperty('--node-accent');
     }
@@ -311,6 +321,8 @@
       card.querySelector('.node-card__cfg').hidden = true;
       const gb2 = card.querySelector('.node-card__graph');
       if (gb2) gb2.hidden = true;
+      const auto2 = card.querySelector('.node-card__auto');
+      if (auto2) { auto2.hidden = true; delete auto2.dataset.snap; }
       card.querySelector('.node-card__handshake').hidden = false;
       card.style.removeProperty('--node-accent');
     }
@@ -1529,6 +1541,16 @@
       if (ev.key === 'Escape') closeAllNodeMenus();
     });
 
+    // Resize fereastră: re-aliniem lăţimea card-urilor istoric cu cele
+    // active. Throttle simplu via timeout.
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (nodes.syncHistoryCardWidth) nodes.syncHistoryCardWidth();
+      }, 120);
+    });
+
     // Buton "Vezi diagnostica" pe cardul hub din Monitor.
     const diagBtn = document.getElementById('btn-diagnostics');
     if (diagBtn) {
@@ -1644,7 +1666,12 @@
 
   /** Re-randează secţiunea "Noduri conectate anterior" pe baza
       localStorage-ului. Apelată după fiecare renderNodeGrid pe grila
-      Noduri + manual din butonul de ştergere. */
+      Noduri + manual din butonul de ştergere.
+
+      Diffing pe snapshot: dacă set-ul de noduri din istoric nu s-a
+      schimbat (acelaşi nume + config + lastSeen), nu reconstruim DOM-ul.
+      Asta evită "palpâirea" cauzată de polling-ul de la 1.5s care chema
+      renderHistory de fiecare dată. */
   function renderHistory() {
     const section = nodes.el.nodesHistorySection;
     const grid = nodes.el.nodesHistoryGrid;
@@ -1654,19 +1681,72 @@
     const entries = Object.values(h).sort(
       (a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
 
+    // Snapshot-ul cuprinde doar identificatori (nu lastSeen, care creşte
+    // la fiecare polling — ne-ar invalida snapshot-ul mereu).
+    const snap = entries.map((e) => {
+      const p = (e.config && e.config.plant && e.config.plant.id) || '';
+      const s = (e.config && e.config.soil  && e.config.soil.id)  || '';
+      const c = (e.config && e.config.color) || '';
+      return e.name + ':' + p + ':' + s + ':' + c;
+    }).join('|');
+
     if (entries.length === 0) {
-      section.hidden = true;
-      grid.innerHTML = '';
+      if (grid.dataset.snap !== '') {
+        section.hidden = true;
+        grid.innerHTML = '';
+        grid.dataset.snap = '';
+      }
       return;
     }
 
     section.hidden = false;
-    // Re-randăm de la zero — istoricul nu se schimbă des, nu merită
-    // diffing in-place.
+    if (grid.dataset.snap === snap) return;   // nimic nu s-a schimbat
+    grid.dataset.snap = snap;
+
     grid.innerHTML = '';
     for (const entry of entries) {
       grid.appendChild(buildHistoryCard(entry));
     }
+
+    // Aliniază lăţimea cu un card din grila activă de sus, ca să arate
+    // identic. Măsurăm prima coloană din #nodes-grid (cea mai apropiată
+    // grilă vizibilă) şi propagăm prin variabila CSS --history-card-width.
+    syncHistoryCardWidth();
   }
   nodes.renderNodesHistory = renderHistory;
+
+  /** Sincronizează lăţimea card-urilor din istoric cu cele din grila
+      activă (de deasupra). Apelată după render + observă LIVE prin
+      ResizeObserver — orice schimbare de lăţime a unui card de sus
+      propagă imediat la grila istoric. */
+  let historyResizeObserver = null;
+  function syncHistoryCardWidth() {
+    const grid = nodes.el.nodesHistoryGrid;
+    if (!grid) return;
+    const sample = (nodes.el.nodesGrid
+                     && nodes.el.nodesGrid.querySelector('.node-card'))
+                || (nodes.el.nodeGrid
+                     && nodes.el.nodeGrid.querySelector('.node-card'));
+    if (!sample) {
+      // Nu există card de sus — folosim fallback rezonabil (variabila
+      // CSS are deja default 360px).
+      return;
+    }
+    const apply = () => {
+      const w = Math.round(sample.getBoundingClientRect().width);
+      if (w > 0) grid.style.setProperty('--history-card-width', w + 'px');
+    };
+    apply();
+    // Observer LIVE: orice resize al card-ului-sample setează lăţimea.
+    // Asta acoperă: schimbare viewport, redraw după animaţii, schimbarea
+    // numărului de carduri active care realocă coloanele etc.
+    if (historyResizeObserver) {
+      historyResizeObserver.disconnect();
+    }
+    if (typeof ResizeObserver !== 'undefined') {
+      historyResizeObserver = new ResizeObserver(apply);
+      historyResizeObserver.observe(sample);
+    }
+  }
+  nodes.syncHistoryCardWidth = syncHistoryCardWidth;
 })();

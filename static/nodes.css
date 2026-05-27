@@ -1926,3 +1926,18 @@
   font-weight: 400;
   font-style: italic;
 }
+
+/* Istoricul foloseşte EXACT acelaşi tipar ca grila Monitor — auto-fit
+   cu minmax(260px, 1fr) — dar plafonăm lăţimea fiecărui card individual
+   la --history-card-width (setat de JS din lăţimea unui card de sus).
+   `auto-fit` cu un singur card l-ar întinde pe tot rândul; max-width pe
+   card limitează lăţimea reală, iar cardul stă ancorat în stânga rândului. */
+#nodes-history-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  justify-content: start;
+}
+#nodes-history-grid .node-card {
+  max-width: var(--history-card-width, 360px);
+  width: 100%;
+  justify-self: start;
+}

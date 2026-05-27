@@ -23,9 +23,14 @@
     wiz.soil = null;
     wiz.color = 'mint';
     wiz.edit = false;
+    // Setăm hash-ul ÎNAINTE de showWizard. showWizard apelează
+    // activateTab('nodes') care emite tab-activated → applyNodesHash
+    // citeşte window.location.hash. Dacă hash-ul e încă cel vechi
+    // (#monitor), applyNodesHash apelează closeSubViews() şi ascunde
+    // wizardul tocmai deschis.
+    nodes.setNodesHash(nodeName + '/configure');
     showWizard(nodeName, 'Configurare');
     setWizardStep('plant');
-    nodes.setNodesHash(nodeName + '/configure');
   };
 
   /** Deschide wizardul pentru RECONFIGURARE — pre-completat, navigare liberă.
@@ -74,8 +79,10 @@
     hide(el.nodeStats);
     hide(el.nodeParams);
     show(el.nodesHeader);
-    show(el.nodesGrid);
-    if (nodes.renderNodesHistory) nodes.renderNodesHistory();
+    // Ascundem grila ŞI istoricul cât rulează loader-ul — nu trebuie să
+    // pâlpâie vizual înainte de ascundere.
+    hide(el.nodesGrid);
+    hide(el.nodesHistorySection);
 
     let loader = document.getElementById('reconfig-loader');
     if (!loader) {
@@ -90,14 +97,14 @@
     }
     loader.querySelector('strong').textContent = nodeName;
     loader.hidden = false;
-    hide(el.nodesGrid);
-    hide(el.nodesHistorySection);
   }
 
   function hideReconfigLoader() {
     const loader = document.getElementById('reconfig-loader');
     if (loader) loader.hidden = true;
-    show(nodes.el.nodesGrid);
+    // NU re-arătăm grila aici — urmează imediat showWizard() la succes
+    // (care lasă grila ascunsă) sau showReconfigError() la eşec (care
+    // gestionează singur ce să afişeze). Re-arătarea ar produce flicker.
   }
 
   function showReconfigError(nodeName, message) {
@@ -133,12 +140,16 @@
   /** Afişează wizardul: ascunde grila, construieşte paşii, setează titlul. */
   function showWizard(nodeName, titleWord) {
     const el = nodes.el;
-    if (window.Dropwise.activateTab) window.Dropwise.activateTab('nodes');
+    // Ascundem/arătăm ÎNAINTE de activateTab — altfel activateTab emite
+    // un eveniment care porneşte din nou polling-ul, iar pollNodesGrid
+    // vede încă wizardul ascuns (el.wizard.hidden === true), trece prin
+    // guard, face fetch async şi randează grila + istoricul peste wizard.
     hide(el.nodesHeader);
     hide(el.nodesGrid);
     hide(el.nodesHistorySection);
     show(el.wizard);
     hide(el.wizardError);
+    if (window.Dropwise.activateTab) window.Dropwise.activateTab('nodes');
     el.wizardNodeName.textContent = nodeName;
     if (el.wizardTitleWord) el.wizardTitleWord.textContent = titleWord;
     el.wizard.dataset.edit = wiz.edit ? 'true' : 'false';
