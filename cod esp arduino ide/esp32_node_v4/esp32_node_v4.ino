@@ -31,7 +31,7 @@
 #include <SensirionI2cSht4x.h>
 
 // Schimba aici pentru fiecare nod ("P1", "P2", "P3")
-#define NODE_NAME "P2"
+#define NODE_NAME "P1"
 
 #define LED_PIN          2
 #define SOIL_POWER_PIN   26
