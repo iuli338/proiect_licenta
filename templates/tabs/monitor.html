@@ -53,19 +53,30 @@
         <div class="graph-header">
           <p class="wizard__node graph-header__title">
             Grafice date senzori pentru <strong id="graph-node-name">—</strong>
-            <span class="wizard__node-sub">· 24 ore</span>
+            <span class="wizard__node-sub" id="graph-window-label">· 24 ore</span>
           </p>
-          <button type="button" id="graph-download-csv"
-                  class="btn btn--ghost graph-header__csv graph-content">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                 aria-hidden="true">
-              <path d="M21 15 v 4 a 2 2 0 0 1 -2 2 H 5 a 2 2 0 0 1 -2 -2 v -4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            <span>Descarcă CSV</span>
-          </button>
+          <div class="graph-header__actions">
+            {# Toggle ISTORIC / LIVE — schimbă fereastra de timp. Istoric =
+               24h din /api/node/<P>/history (datele actuale). Live = buffer
+               rolling 5 min populat din /api/hub/status. #}
+            <div class="graph-toggle" role="group" aria-label="Mod afişare">
+              <button type="button" class="graph-toggle__btn"
+                      data-mode="history" aria-pressed="true">Istoric</button>
+              <button type="button" class="graph-toggle__btn"
+                      data-mode="live" aria-pressed="false">Live</button>
+            </div>
+            <button type="button" id="graph-download-csv"
+                    class="btn btn--ghost graph-header__csv graph-content">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                   aria-hidden="true">
+                <path d="M21 15 v 4 a 2 2 0 0 1 -2 2 H 5 a 2 2 0 0 1 -2 -2 v -4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              <span>Descarcă CSV</span>
+            </button>
+          </div>
         </div>
 
         {# Card orizontal de loading — vizibil cât timp aşteptăm datele

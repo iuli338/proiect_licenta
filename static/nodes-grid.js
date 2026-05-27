@@ -88,6 +88,51 @@
     return false;
   }
 
+  // ---------- Buffer LIVE pentru pagina Grafice ----------
+  //
+  // Schema: { "P1": { samples: [...], lastPushedAt: 0 } }
+  // Fiecare sample = { ts, soil_moisture_pct, air_temp_c, air_humidity_pct, lux }
+  //
+  // Push pe ritm FIX de LIVE_UPDATE_PERIOD_MS — la fiecare poll verificăm
+  // dacă a trecut perioada de la ultimul push pentru nodul respectiv.
+  // Dacă da, adăugăm valorile curente din `sensors`. Predictibil, simplu,
+  // ritm uniform pe axa X indiferent de age_ms-ul SENSE de la firmware.
+  const LIVE_UPDATE_PERIOD_MS = 5000;        // push la 5 secunde
+  const LIVE_WINDOW_MS        = 5 * 60 * 1000;  // 5 minute rolling
+  const liveBuffers = {};                     // per nume nod
+  function liveBufferFor(name) {
+    if (!liveBuffers[name]) liveBuffers[name] = { samples: [], lastPushedAt: 0 };
+    return liveBuffers[name];
+  }
+  nodes.getLiveBuffer = liveBufferFor;
+
+  /** Push o nouă măsurătoare în buffer-ul live pentru un nod.
+      Apelat din pollMonitor. Returnează true dacă s-a adăugat (a trecut
+      perioada de update de la ultimul push), false altfel. */
+  function pushLiveSample(port) {
+    if (!port || !port.name || !port.sensors) return false;
+    const buf = liveBufferFor(port.name);
+    const now = Date.now();
+    if (now - buf.lastPushedAt < LIVE_UPDATE_PERIOD_MS) {
+      return false;   // n-a trecut încă perioada — sărim
+    }
+    buf.lastPushedAt = now;
+    const s = port.sensors;
+    buf.samples.push({
+      ts: now,
+      soil_moisture_pct: s.soil_moisture_pct,
+      air_temp_c: s.air_temp_c,
+      air_humidity_pct: s.air_humidity_pct,
+      lux: s.lux,
+    });
+    // Curăţăm punctele mai vechi de fereastra rolling.
+    const cutoff = now - LIVE_WINDOW_MS;
+    while (buf.samples.length > 0 && buf.samples[0].ts < cutoff) {
+      buf.samples.shift();
+    }
+    return true;
+  }
+
   // ---------- Polling grilă ----------
 
   // Cache diagnostic — se invalidează la pierdere de conexiune sau la
@@ -119,6 +164,16 @@
       }
       setHubCard('online', j.data);
       renderNodeGrid(j.data.ports || [], el.nodeGrid);
+
+      // Buffer live (5 min rolling) pentru pagina Grafice — populat
+      // doar când senzorii trimit valori NOI (age_ms scade).
+      let anyLivePush = false;
+      (j.data.ports || []).forEach((p) => {
+        if (pushLiveSample(p)) anyLivePush = true;
+      });
+      if (anyLivePush && nodes.refreshLiveGraph) {
+        nodes.refreshLiveGraph();   // dacă graficul live e deschis, redraw
+      }
 
       // Stocăm ultimele date de status într-un global accesibil altor module
       // (ex: settings.js pentru afişarea orei). Plus eveniment custom pentru
@@ -839,8 +894,17 @@
       // După succes, forţăm un poll imediat ca să refacem UI-ul.
       if (nodes.pollMonitor) nodes.pollMonitor();
       if (nodes.pollNodesGrid) nodes.pollNodesGrid();
+      // Toast de feedback — confirmare vizuală că schimbarea a fost
+      // aplicată pe hub (sau în state-ul mock).
+      showResetToast(
+        enabled
+          ? `Udarea automată a fost activată pentru ${nodeName}.`
+          : `Udarea automată a fost dezactivată pentru ${nodeName}.`,
+        'ok');
     } catch (e) {
-      alert('Nu am putut schimba udarea automată: ' + (e.message || e));
+      showResetToast(
+        'Nu am putut schimba udarea automată: ' + (e.message || e),
+        'error');
     }
   }
   nodes.toggleAutoWatering = toggleAutoWatering;
@@ -1166,6 +1230,119 @@
     air_humidity_pct:  { unit: '%',  color: 'rgba(255,160,200,1)' },
   };
 
+  // ---------- Mod istoric vs. live pe pagina Grafice ----------
+  //
+  // Toggle-ul din header schimbă fereastra de timp:
+  //   - "history": 24 ore din /api/node/<P>/history, slot-uri orare
+  //   - "live": 5 minute rolling din liveBuffers (push în pollMonitor)
+  //
+  // currentGraphCtx ţine cache-ul ne-static (nodeName, chartLib, nodeCfg,
+  // samples istorice) ca să nu refacem fetch la swap.
+  let currentGraphMode = 'history';
+  let currentGraphCtx  = null;       // { nodeName, chartLib, nodeCfg, samples }
+
+  /** Construieşte (labels, byMetric) pentru un mod dat. */
+  function buildGraphSeries(mode, historySamples) {
+    if (mode === 'live') {
+      const buf = currentGraphCtx ? liveBufferFor(currentGraphCtx.nodeName) : null;
+      const samples = (buf && buf.samples) || [];
+      // Etichete = mm:ss faţă de momentul curent (axa X scrolluieşte).
+      const labels = samples.map((s) => {
+        const d = new Date(s.ts);
+        return d.getMinutes().toString().padStart(2, '0') + ':' +
+               d.getSeconds().toString().padStart(2, '0');
+      });
+      const metrics = ['soil_moisture_pct', 'air_temp_c',
+                       'air_humidity_pct', 'lux'];
+      const byMetric = {};
+      metrics.forEach((m) => {
+        byMetric[m] = samples.map((s) => (s[m] == null ? null : Number(s[m])));
+      });
+      return { labels, byMetric };
+    }
+    // === ISTORIC === (logica veche, 24 slot-uri orare)
+    const HOURS = 24;
+    const now = Date.now();
+    const nowHour = new Date(now);
+    nowHour.setMinutes(0, 0, 0);
+    const labels = [];
+    const slotEpochs = [];
+    for (let i = 0; i < HOURS; i++) {
+      const d = new Date(nowHour.getTime() - (HOURS - 1 - i) * 3600 * 1000);
+      labels.push(d.getHours().toString().padStart(2, '0') + ':00');
+      slotEpochs.push(Math.floor(d.getTime() / 1000));
+    }
+    const sampleByHour = {};
+    for (const s of (historySamples || [])) {
+      const h = Math.floor(s.ts / 3600) * 3600;
+      sampleByHour[h] = s;
+    }
+    const metrics = ['soil_moisture_pct', 'air_temp_c',
+                     'air_humidity_pct', 'lux'];
+    const byMetric = {};
+    metrics.forEach((m) => {
+      byMetric[m] = slotEpochs.map((h) => {
+        const s = sampleByHour[h];
+        return s ? s[m] : null;
+      });
+    });
+    return { labels, byMetric };
+  }
+
+  /** Re-randează datele în graficele Chart.js deja construite, fără a le
+      distruge (păstrează scale + tooltip-uri). Apelat la swap mod sau la
+      push de nou sample live. */
+  function refreshGraphData(mode) {
+    if (!currentGraphCtx || activeCharts.length === 0) return;
+    const built = buildGraphSeries(mode,
+      mode === 'history' ? currentGraphCtx.samples : null);
+    document.querySelectorAll('#node-graph .graph-card__canvas')
+      .forEach((canvas, idx) => {
+        const metric = canvas.dataset.metric;
+        const chart = activeCharts[idx];
+        if (!chart || !metric) return;
+        chart.data.labels = built.labels;
+        // Dataset[0] = datele principale. Restul sunt linii de referinţă
+        // care nu depind de mod — refacem doar lungimea (la istoric=24,
+        // la live=N puncte).
+        if (chart.data.datasets[0]) {
+          chart.data.datasets[0].data = built.byMetric[metric] || [];
+        }
+        for (let i = 1; i < chart.data.datasets.length; i++) {
+          const ds = chart.data.datasets[i];
+          if (ds && Array.isArray(ds.data)) {
+            // Linii de referinţă cu valoare constantă — refacem lungimea.
+            const v = ds.data[0];
+            ds.data = new Array(built.labels.length).fill(v);
+          }
+        }
+        chart.update('none');   // fără animaţie ca să fie smooth pe push
+      });
+  }
+
+  /** Apelată din pollMonitor după ce a fost adăugat un sample live nou,
+      dar doar dacă suntem în mod LIVE pe pagina Grafice. */
+  nodes.refreshLiveGraph = function () {
+    const view = document.getElementById('node-graph');
+    if (!view || view.hidden) return;
+    if (currentGraphMode !== 'live') return;
+    refreshGraphData('live');
+  };
+
+  /** Setează modul activ + actualizează butoanele + reîncarcă datele. */
+  function setGraphMode(mode) {
+    if (mode !== 'live' && mode !== 'history') return;
+    currentGraphMode = mode;
+    document.querySelectorAll('.graph-toggle__btn').forEach((b) => {
+      const pressed = b.dataset.mode === mode;
+      b.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    });
+    // Labelul ferestrei de timp în header.
+    const lbl = document.getElementById('graph-window-label');
+    if (lbl) lbl.textContent = '· ' + (mode === 'live' ? '5 minute (live)' : '24 ore');
+    refreshGraphData(mode);
+  }
+
   async function openGraphView(nodeName) {
     if (graphViewOpening) return;     // re-entry blocat (vezi guard mai sus)
     graphViewOpening = true;
@@ -1196,7 +1373,11 @@
     title.textContent = nodeName;
     main.hidden = true;
     view.hidden = false;
-    nodes.stopMonitorPolling && nodes.stopMonitorPolling();
+    // NU oprim pollMonitor — bufferul live (5 min rolling) e populat
+    // din polling-ul de Monitor; dacă oprim, modul Live nu mai primeşte
+    // sample-uri noi. Polling-ul rulează în background, costul e mic
+    // (un singur GET la 1.5s); când eşti pe pagina grafic vede oricum
+    // nimic în mod Istoric, doar populează buffer live.
 
     // Afişăm card-ul de loading în locul graficelor + butonului CSV cât
     // timp aşteptăm Chart.js + datele de la hub. Pe live, fetch-ul către
@@ -1207,15 +1388,17 @@
     activeCharts.forEach((c) => c.destroy());
     activeCharts = [];
 
-    // Încărcăm Chart.js (CDN) + istoric + config nod — paralel.
+    // Încărcăm Chart.js (CDN) + config nod — obligatorii. Istoricul e
+    // OPŢIONAL: dacă endpoint-ul /history nu există pe firmware (404)
+    // sau dă alt eroare, mergem cu samples=[] şi pagina rămâne funcţională
+    // — modul Live foloseşte oricum bufferul rolling din pollMonitor.
     // Atenţie: NU folosi `history` ca nume local — face shadow pe
     // window.history şi rupe `history.replaceState` apelat mai sus
     // (temporal dead zone). Folosim `historyData`.
-    let chartLib, historyData, nodeCfg;
+    let chartLib, nodeCfg;
     try {
-      [chartLib, historyData, nodeCfg] = await Promise.all([
+      [chartLib, nodeCfg] = await Promise.all([
         loadChartJs(),
-        nodes.getJSON('/api/node/' + encodeURIComponent(nodeName) + '/history'),
         nodes.getJSON('/api/node/' + encodeURIComponent(nodeName)),
       ]);
     } catch (e) {
@@ -1226,42 +1409,30 @@
       graphViewOpening = false;
       return;
     }
+    let historyData = { samples: [] };
+    try {
+      historyData = await nodes.getJSON(
+        '/api/node/' + encodeURIComponent(nodeName) + '/history');
+    } catch (e) {
+      // Endpoint-ul lipseşte pe firmware sau hub-ul nu răspunde.
+      // Lăsăm samples=[] — utilizatorul poate folosi modul Live oricum.
+      console.warn('History fetch failed:', e.message);
+    }
 
     const samples = historyData.samples || [];
     lastHistorySamples = samples;
     lastHistoryNodeName = nodeName;
+    // Stocăm contextul ca să refacem graficele la swap istoric ↔ live
+    // fără re-fetch.
+    currentGraphCtx = { nodeName: nodeName, chartLib, nodeCfg, samples };
 
-    // Grilă fixă de 24 slot-uri orare, terminând la ora curentă. Asta
-    // garantează că axa X arată mereu un interval de 24 ore, chiar dacă
-    // nodul are doar câteva sample-uri reale (restul rămân goluri/null).
-    // Slot-ul k = ora HH:00 corespunzătoare timpului (acum - (23 - k) ore).
-    const HOURS = 24;
-    const now = Date.now();
-    const nowHour = new Date(now);
-    nowHour.setMinutes(0, 0, 0);
-    const labels = [];
-    const slotEpochs = [];   // epoch-ul (secunde) al fiecărui slot
-    for (let i = 0; i < HOURS; i++) {
-      const d = new Date(nowHour.getTime() - (HOURS - 1 - i) * 3600 * 1000);
-      labels.push(d.getHours().toString().padStart(2, '0') + ':00');
-      slotEpochs.push(Math.floor(d.getTime() / 1000));
-    }
+    // Construim labels + data pentru modul ISTORIC iniţial. Funcţia de
+    // refresh-uire reconstruieşte ambele baze de date (istoric+live) când
+    // utilizatorul comută toggle-ul.
+    const built = buildGraphSeries('history', samples);
+    const labels = built.labels;
 
-    // Index sample-urile reale pe ora lor (epoch întreg de oră).
-    const sampleByHour = {};
-    for (const s of samples) {
-      const h = Math.floor(s.ts / 3600) * 3600;
-      sampleByHour[h] = s;
-    }
-
-    /** Întoarce array-ul de 24 valori pentru o metrică, cu null acolo
-        unde nu avem sample. */
-    function alignedData(metricKey) {
-      return slotEpochs.map((h) => {
-        const s = sampleByHour[h];
-        return s ? s[metricKey] : null;
-      });
-    }
+    function alignedData(metricKey) { return built.byMetric[metricKey] || []; }
 
     // Praguri pentru linii de referinţă pe grafic:
     //   - umiditate sol: setpoint (mereu vizibil, dashed alb subtil);
@@ -1462,9 +1633,24 @@
     }
   };
 
-  /** Generează CSV cu ultimele samples şi declanşează download în browser. */
+  /** Generează CSV cu sample-urile din modul curent (istoric sau live) şi
+      declanşează download în browser. Pentru istoric, ts e în secunde
+      (epoch UNIX); pentru live, ts e în milisecunde (Date.now()). */
   function downloadHistoryCsv() {
-    if (!lastHistorySamples || !lastHistorySamples.length) return;
+    // Sursa datelor + scala timestamp-ului depind de modul curent.
+    let samples = [];
+    let tsMultiplier = 1000;   // pentru new Date(): istoric ts*1000, live ts*1
+    let modeSuffix = 'history';
+    if (currentGraphMode === 'live' && currentGraphCtx) {
+      const buf = liveBufferFor(currentGraphCtx.nodeName);
+      samples = (buf && buf.samples) || [];
+      tsMultiplier = 1;
+      modeSuffix = 'live';
+    } else {
+      samples = lastHistorySamples || [];
+      tsMultiplier = 1000;
+    }
+    if (!samples.length) return;
 
     const header = [
       'timestamp', 'datetime',
@@ -1472,8 +1658,8 @@
       'air_temp_c', 'air_humidity_pct', 'lux',
     ];
     const rows = [header.join(',')];
-    for (const s of lastHistorySamples) {
-      const d = new Date(s.ts * 1000);
+    for (const s of samples) {
+      const d = new Date(s.ts * tsMultiplier);
       const pad = (n) => String(n).padStart(2, '0');
       const datetime =
         d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
@@ -1487,13 +1673,14 @@
     }
     const csv = rows.join('\n') + '\n';
 
-    // Declanşăm download-ul prin Blob + link sintetic.
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     const today = new Date().toISOString().slice(0, 10);
+    const nodeName = (currentGraphCtx && currentGraphCtx.nodeName)
+                     || lastHistoryNodeName;
     a.href = url;
-    a.download = `dropwise_${lastHistoryNodeName}_${today}.csv`;
+    a.download = `dropwise_${nodeName}_${modeSuffix}_${today}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1521,6 +1708,8 @@
     main.hidden = false;
     activeCharts.forEach((c) => c.destroy());
     activeCharts = [];
+    currentGraphCtx = null;
+    currentGraphMode = 'history';   // default la următoarea deschidere
     nodes.startMonitorPolling && nodes.startMonitorPolling();
   }
 
@@ -1568,6 +1757,11 @@
     if (csvBtn) {
       csvBtn.addEventListener('click', downloadHistoryCsv);
     }
+
+    // Toggle Istoric ↔ Live în header-ul paginii Grafic.
+    document.querySelectorAll('.graph-toggle__btn').forEach((b) => {
+      b.addEventListener('click', () => setGraphMode(b.dataset.mode));
+    });
   };
 
   // ---------- Randare secţiune istoric ----------
