@@ -16,10 +16,11 @@
    ============================================================ */
 
 // Verificări de dimensiuni — dacă struct-urile cresc, layout-ul se rupe.
-static_assert(sizeof(EepromHeader) == 32, "EepromHeader trebuie sa fie 32 B");
-static_assert(sizeof(NodeConfig)   == NODE_CONFIG_SIZE, "NodeConfig != 96 B");
-static_assert(sizeof(RegParams)    == REG_PARAMS_SIZE,  "RegParams != 64 B");
-static_assert(sizeof(NodeStats)    == NODE_STATS_SIZE,  "NodeStats != 64 B");
+static_assert(sizeof(EepromHeader)  == 32, "EepromHeader trebuie sa fie 32 B");
+static_assert(sizeof(NodeConfig)    == NODE_CONFIG_SIZE, "NodeConfig != 128 B");
+static_assert(sizeof(RegParams)     == REG_PARAMS_SIZE,  "RegParams != 64 B");
+static_assert(sizeof(NodeStats)     == NODE_STATS_SIZE,  "NodeStats != 64 B");
+static_assert(sizeof(SystemConfig)  == SYS_CONFIG_SIZE,  "SystemConfig != 64 B");
 
 // ---------- Offset per NUME NOD ----------
 //
@@ -130,6 +131,13 @@ bool storageInit() {
       bootLogf("storageInit: zeroSlot stats P%d ESUAT\n", s + 1);
       return false;
     }
+  }
+
+  // Slot global de sistem (debit pompă). Zeroizat => valid=0 => firmware-ul
+  // foloseşte debitul implicit până la prima setare din dashboard.
+  if (!zeroSlot(EEPROM_OFFSET_SYSCFG, SYS_CONFIG_SIZE)) {
+    bootLogf("storageInit: zeroSlot syscfg ESUAT\n");
+    return false;
   }
 
   // Scriem header-ul ABIA la final — dacă init-ul cade la mijloc, la
@@ -259,4 +267,61 @@ bool storageClearNode(const char* nodeName) {
   Serial.print(" prm="); Serial.print(ok2);
   Serial.print(" st=");  Serial.println(ok3);
   return ok1 && ok2 && ok3;
+}
+
+// ---------- SystemConfig (debit pompă, global) ----------
+
+bool storageLoadSystem(SystemConfig& sc) {
+  if (!eepromReady) { memset(&sc, 0, sizeof(sc)); return false; }
+  return eepromRead(EEPROM_OFFSET_SYSCFG, (uint8_t*)&sc, sizeof(sc));
+}
+
+bool storageSaveSystem(const SystemConfig& sc) {
+  if (!eepromReady) return false;
+  i2cBusyDepth++;
+  bool ok = eepromWrite(EEPROM_OFFSET_SYSCFG, (const uint8_t*)&sc, sizeof(sc));
+  i2cBusyDepth--;
+  return ok;
+}
+
+// La boot (după storageInit): dacă EEPROM-ul are un debit salvat valid şi
+// în interval, îl încarcă în variabila globală pumpFlowMlPerSec. Altfel
+// lasă valoarea de fabrică. Apelat din startNormalMode().
+void loadFlowRate() {
+  if (!eepromReady) {
+    bootLogf("Debit pompa: EEPROM lipsa -> implicit %d.%02d ml/s\n",
+             (int)PUMP_FLOW_DEFAULT,
+             (int)((PUMP_FLOW_DEFAULT - (int)PUMP_FLOW_DEFAULT) * 100));
+    return;
+  }
+  SystemConfig sc;
+  if (storageLoadSystem(sc) && sc.valid == 1 && sc.flowMlPerSecX100 > 0) {
+    float v = sc.flowMlPerSecX100 / 100.0f;
+    if (v >= PUMP_FLOW_MIN && v <= PUMP_FLOW_MAX) {
+      pumpFlowMlPerSec = v;
+      bootLogf("Debit pompa: incarcat din EEPROM = %d.%02d ml/s\n",
+               sc.flowMlPerSecX100 / 100, sc.flowMlPerSecX100 % 100);
+      return;
+    }
+  }
+  bootLogf("Debit pompa: slot gol/invalid -> implicit %d.%02d ml/s\n",
+           (int)PUMP_FLOW_DEFAULT,
+           (int)((PUMP_FLOW_DEFAULT - (int)PUMP_FLOW_DEFAULT) * 100));
+}
+
+// Setează un debit nou: validează intervalul, scrie în EEPROM ŞI actualizează
+// variabila globală (ambele în acelaşi pas, ca să nu divergă). Returnează
+// false dacă valoarea e în afara intervalului sau scrierea EEPROM a picat.
+bool saveFlowRate(float mlPerSec) {
+  if (mlPerSec < PUMP_FLOW_MIN || mlPerSec > PUMP_FLOW_MAX) return false;
+  SystemConfig sc;
+  memset(&sc, 0, sizeof(sc));
+  sc.valid = 1;
+  sc.flowMlPerSecX100 = (uint16_t)(mlPerSec * 100.0f + 0.5f);
+  if (!storageSaveSystem(sc)) return false;
+  pumpFlowMlPerSec = sc.flowMlPerSecX100 / 100.0f;
+  Serial.print("Debit pompa setat: ");
+  Serial.print(pumpFlowMlPerSec);
+  Serial.println(" ml/s");
+  return true;
 }

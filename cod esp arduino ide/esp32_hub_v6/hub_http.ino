@@ -182,7 +182,7 @@ void handleDose() {
   startWatering(port, (uint16_t)mlArg);
 
   // Durata totală estimată (ms): valve open delay + dose duration + pump stop delay.
-  unsigned long doseMs = (unsigned long)(mlArg * 1000UL / PUMP_FLOW_ML_PER_SEC);
+  unsigned long doseMs = (unsigned long)(mlArg * 1000UL / pumpFlowMlPerSec);
   unsigned long totalMs = VALVE_OPEN_DELAY + doseMs + PUMP_STOP_DELAY;
 
   String json = "{\"status\":\"dosing\",\"port\":";
@@ -348,6 +348,15 @@ void handleStatus() {
   } else {
     json += ",\"time\":null";
   }
+  // Debitul activ al pompei [ml/s] — afişat şi editabil din tab-ul Setări.
+  {
+    int whole = (int)pumpFlowMlPerSec;
+    int frac  = (int)((pumpFlowMlPerSec - whole) * 100.0f + 0.5f);
+    char fbuf[16];
+    snprintf(fbuf, sizeof(fbuf), "%d.%02d", whole, frac);
+    json += ",\"flow_ml_per_sec\":";
+    json += fbuf;
+  }
   json += "}";
 
   sendCorsHeaders();
@@ -438,6 +447,67 @@ void handleSetTime() {
 
   char resp[40];
   snprintf(resp, sizeof(resp), "{\"ok\":true,\"time\":\"%02d:%02d\"}", hh, mm);
+  server.send(200, "application/json", resp);
+}
+
+// Setarea debitului pompei din UI — POST /flow-rate, body:
+// {"flow_ml_per_sec": 3.21}. Validare: PUMP_FLOW_MIN..PUMP_FLOW_MAX.
+//
+// Comportament în funcţie de starea EEPROM-ului:
+//   - EEPROM OK  : scrie persistent + actualizează variabila globală;
+//                  răspunde {"ok":true,"persisted":true,...}.
+//   - EEPROM lipsă: actualizează DOAR variabila globală (debitul e valabil
+//                  până la următorul reboot); răspunde {"ok":true,
+//                  "persisted":false,...}. UI-ul arată un avertisment galben.
+void handleSetFlowRate() {
+  if (!checkAccessCode()) return;   // cod lipsa/gresit => 404
+  sendCorsHeaders();
+
+  String body = server.hasArg("plain") ? server.arg("plain") : "";
+  int k = body.indexOf("\"flow_ml_per_sec\"");
+  if (k < 0) {
+    server.send(400, "application/json",
+      "{\"error\":\"missing flow_ml_per_sec\"}");
+    return;
+  }
+  // Valoarea e după primul ':' care urmează cheii (număr, nu string).
+  int colon = body.indexOf(':', k);
+  if (colon < 0) {
+    server.send(400, "application/json", "{\"error\":\"format invalid\"}");
+    return;
+  }
+  float v = body.substring(colon + 1).toFloat();
+  if (v < PUMP_FLOW_MIN || v > PUMP_FLOW_MAX) {
+    server.send(400, "application/json",
+      "{\"error\":\"flow out of range\"}");
+    return;
+  }
+
+  bool persisted = false;
+  if (eepromReady) {
+    // saveFlowRate scrie EEPROM + actualizează variabila globală.
+    persisted = saveFlowRate(v);
+    if (!persisted) {
+      server.send(500, "application/json",
+        "{\"error\":\"eeprom write failed\"}");
+      return;
+    }
+  } else {
+    // Fără EEPROM: aplicăm doar în RAM (se pierde la reboot).
+    pumpFlowMlPerSec = v;
+    Serial.print("Debit pompa setat DOAR in RAM (EEPROM lipsa): ");
+    Serial.print(pumpFlowMlPerSec);
+    Serial.println(" ml/s");
+  }
+
+  // Răspundem cu debitul efectiv aplicat (rotunjit la 2 zecimale prin x100)
+  // şi cu flag-ul persisted, ca UI-ul să decidă tipul de toast.
+  int whole = (int)pumpFlowMlPerSec;
+  int frac  = (int)((pumpFlowMlPerSec - whole) * 100.0f + 0.5f);
+  char resp[80];
+  snprintf(resp, sizeof(resp),
+    "{\"ok\":true,\"persisted\":%s,\"flow_ml_per_sec\":%d.%02d}",
+    persisted ? "true" : "false", whole, frac);
   server.send(200, "application/json", resp);
 }
 

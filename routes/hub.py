@@ -137,6 +137,9 @@ def _mock_hub_status() -> dict:
         # IP-ul hub-ului — pentru cardul de stare de pe Monitor.
         "ip": state["hub"].get("ip") or "192.168.1.50",
         "time": f"{now.tm_hour:02d}:{now.tm_min:02d}",
+        # Debitul pompei (ml/s) — pe live vine din firmware; în mock,
+        # valoarea implicită de fabrică (aceeaşi ca PUMP_FLOW_DEFAULT).
+        "flow_ml_per_sec": 3.21,
     }
 
 
@@ -247,7 +250,6 @@ def api_hub_set_time():
     În mock: validăm formatul şi simulăm succesul (nu putem schimba ora
     serverului). În live: proxy POST /time la hub cu X-Access-Code.
     """
-    data = (abort if False else None)  # placeholder
     from flask import request
     payload = request.get_json(silent=True) or {}
     t = (payload.get("time") or "").strip()
@@ -272,6 +274,56 @@ def api_hub_set_time():
         r = requests.post(
             f"http://{hub_ip}/time",
             json={"time": t},
+            headers=auth.hub_headers(),
+            timeout=4,
+        )
+        if r.status_code != 200:
+            return jsonify({"error": f"hub a raspuns {r.status_code}"}), 502
+        return jsonify(r.json())
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@bp.route("/api/hub/flow-rate", methods=["POST"])
+@login_required
+def api_hub_set_flow_rate():
+    """
+    Setează debitul pompei pe hub. Body: {"flow_ml_per_sec": 3.21}.
+
+    Hub-ul scrie debitul în EEPROM (persistent) ŞI într-o variabilă globală
+    folosită imediat la conversia ml↔durată. Dacă EEPROM-ul lipseşte, hub-ul
+    aplică debitul DOAR în RAM şi întoarce persisted=false — UI-ul afişează
+    atunci un avertisment galben (se pierde la următorul reboot).
+
+    În mock: validăm intervalul şi simulăm succesul cu persisted=true.
+    """
+    from flask import request
+    payload = request.get_json(silent=True) or {}
+    raw = payload.get("flow_ml_per_sec")
+    try:
+        flow = float(raw)
+    except (TypeError, ValueError):
+        return jsonify({"error": "flow_ml_per_sec invalid"}), 400
+    # Acelaşi interval ca firmware-ul (PUMP_FLOW_MIN..PUMP_FLOW_MAX).
+    if not (0.5 <= flow <= 50.0):
+        return jsonify({"error": "debit in afara intervalului (0.5–50 ml/s)"}), 400
+
+    if nodes.get_hub_mode() == "mock":
+        return jsonify({
+            "ok": True, "persisted": True,
+            "flow_ml_per_sec": round(flow, 2), "mock": True,
+        })
+
+    state = load_state()
+    hub_ip = state["hub"].get("ip")
+    if not hub_ip:
+        return jsonify({"error": "hub_ip_not_set"}), 503
+    if requests is None:
+        return jsonify({"error": "requests_not_installed"}), 500
+    try:
+        r = requests.post(
+            f"http://{hub_ip}/flow-rate",
+            json={"flow_ml_per_sec": round(flow, 2)},
             headers=auth.hub_headers(),
             timeout=4,
         )

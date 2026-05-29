@@ -15,4 +15,6 @@ data/*.json.tmp
 # PyInstaller - artefacte de build (.exe). Vezi build_exe.bat
 build/
 dist/
+desene/
+partea scrisa/
 *.spec

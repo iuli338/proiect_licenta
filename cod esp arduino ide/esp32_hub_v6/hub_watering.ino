@@ -10,7 +10,8 @@
 
 // Porneşte o udare. `ml = 0` înseamnă udare manuală nelimitată (se opreşte
 // abia la /water/stop). `ml > 0` activează modul "dose": pompa se opreşte
-// automat după ml/PUMP_FLOW_ML_PER_SEC secunde.
+// automat după ml/pumpFlowMlPerSec secunde (debitul activ, încărcat din
+// EEPROM la boot şi editabil din dashboard).
 void startWatering(int port, uint16_t ml) {
 
   Serial.print("Starting watering on port ");
@@ -19,7 +20,7 @@ void startWatering(int port, uint16_t ml) {
     Serial.print(" cu doza ");
     Serial.print(ml);
     Serial.print(" ml (~");
-    Serial.print((uint32_t)(ml / PUMP_FLOW_ML_PER_SEC));
+    Serial.print((uint32_t)(ml / pumpFlowMlPerSec));
     Serial.print(" s)");
   }
   Serial.println();
@@ -27,7 +28,7 @@ void startWatering(int port, uint16_t ml) {
   // Salvăm doza ca să o putem folosi la PHASE_PUMP_STOPPING (statistici)
   // şi la calculul timeout-ului în PHASE_PUMPING.
   doseLastMl     = ml;
-  doseDurationMs = (ml > 0) ? (unsigned long)(ml * 1000UL / PUMP_FLOW_ML_PER_SEC) : 0;
+  doseDurationMs = (ml > 0) ? (unsigned long)(ml * 1000UL / pumpFlowMlPerSec) : 0;
 
   // Deschide valva imediat
   digitalWrite(valvePin[port], HIGH);

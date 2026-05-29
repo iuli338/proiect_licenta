@@ -37,5 +37,35 @@
         </p>
       </div>
 
+      {# Panel: setare debit pompă pe hub (persistent în EEPROM). #}
+      <div class="panel settings-time settings-flow">
+        <div class="settings-time__row">
+          <span class="settings-time__label">Debit pompă:</span>
+          <span class="settings-time__display" id="settings-flow-display">—</span>
+          <span class="settings-flow__unit" id="settings-flow-unit" hidden>ml/s</span>
+          <input type="text" id="settings-flow-input"
+                 class="settings-time__input" placeholder="ml/s"
+                 maxlength="5" inputmode="decimal" hidden />
+          <div class="settings-time__actions">
+            <button type="button" id="settings-flow-edit"
+                    class="btn btn--ghost settings-time__btn">
+              Setează debit
+            </button>
+            <button type="button" id="settings-flow-cancel"
+                    class="btn btn--ghost settings-time__btn" hidden>
+              Anulează
+            </button>
+            <button type="button" id="settings-flow-save"
+                    class="btn btn--primary settings-time__btn" hidden>
+              <span class="btn__label">Setează</span>
+            </button>
+          </div>
+        </div>
+        <p class="settings-time__hint" id="settings-flow-hint" hidden>
+          Debitul nominal al pompei, în ml/s (interval 0.5–50). Calibrat o
+          singură dată pe ansamblul hub-pompă-furtun.
+        </p>
+      </div>
+
     </section>
 

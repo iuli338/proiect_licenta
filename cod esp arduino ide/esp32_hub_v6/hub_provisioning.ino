@@ -274,6 +274,10 @@ void startNormalMode() {
   server.on("/time", HTTP_POST,    handleSetTime);
   server.on("/time", HTTP_OPTIONS, handleOptions);
 
+  // Setare debit pompă din UI (Setări) — persistent în EEPROM.
+  server.on("/flow-rate", HTTP_POST,    handleSetFlowRate);
+  server.on("/flow-rate", HTTP_OPTIONS, handleOptions);
+
   // Toggle individual pe pini (din tab-ul Control)
   server.on("/toggle/16", HTTP_GET, handleToggle16);
   server.on("/toggle/17", HTTP_GET, handleToggle17);

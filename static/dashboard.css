@@ -25,7 +25,7 @@
   content: '';
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.80);
+  background-color: rgba(0, 0, 0, 0.40);
   pointer-events: none;
   z-index: 0;
 }
@@ -494,4 +494,11 @@ kbd {
   font-size: var(--fs-xs);
   color: var(--color-text-faint);
   max-width: none;
+}
+
+/* Unitatea (ml/s) afişată lângă valoarea debitului. */
+.settings-flow__unit {
+  font-size: var(--fs-sm);
+  color: var(--color-text-muted);
+  margin-left: calc(-1 * var(--space-2));
 }

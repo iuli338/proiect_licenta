@@ -70,10 +70,18 @@
 #define VALVE_OPEN_DELAY  2000  // ms intre deschidere valva si pornire pompa
 #define PUMP_STOP_DELAY   1000  // ms intre oprire pompa si inchidere valva
 
-// Debitul pompei — calibrat empiric pe banc (3 măsurători de 100 ml fără
-// furtunul gol): media 3.21 ml/s. Folosit la conversia ml → durată
-// pompă în modul de udare cu cantitate fixă.
-#define PUMP_FLOW_ML_PER_SEC  3.21f
+// Debitul pompei — valoarea IMPLICITĂ de fabrică, în ml/s. Calibrat empiric
+// pe banc (3 măsurători de 100 ml). La pornire, dacă EEPROM-ul conţine un
+// debit salvat valid, acesta îl suprascrie pe cel implicit în variabila
+// globală `pumpFlowMlPerSec` (vezi storageLoadSystem / loadFlowRate).
+// Conversia ml ↔ durată pompă foloseşte ÎNTOTDEAUNA variabila globală, nu
+// acest define (care e doar fallback-ul la prima pornire / EEPROM gol).
+#define PUMP_FLOW_DEFAULT       3.21f
+// Limite realiste pentru debitul configurabil din dashboard. O micropompă
+// de 5 V tipică livrează ~1..20 ml/s; păstrăm o plajă largă dar sigură ca
+// să respingem valori absurde (0, negative, sute de ml/s).
+#define PUMP_FLOW_MIN           0.5f
+#define PUMP_FLOW_MAX           50.0f
 
 // ---------- Provisioning: pini + constante ----------
 
@@ -120,7 +128,8 @@
 // iniţializăm. La schimbarea layout-ului incrementăm versiunea.
 
 #define EEPROM_MAGIC              "DROPv01"   // 8 B (cu \0)
-#define EEPROM_LAYOUT_VERSION     6   // bump => re-init la urmatorul boot
+#define EEPROM_LAYOUT_VERSION     7   // bump => re-init la urmatorul boot
+                                      // (v7: slot SystemConfig — debit pompa)
 
 #define EEPROM_OFFSET_HEADER      0x0000      // 32 B (resv 64 B pana la slot)
 #define EEPROM_OFFSET_CONFIG_P1   0x0040      // 128 B per port
@@ -132,12 +141,14 @@
 #define EEPROM_OFFSET_STATS_P1    0x0280      // 64 B per port
 #define EEPROM_OFFSET_STATS_P2    0x02C0
 #define EEPROM_OFFSET_STATS_P3    0x0300
-// 0x0340..0x0FFF rezervat pentru extensii
+#define EEPROM_OFFSET_SYSCFG      0x0340      // 64 B — config global sistem
+// 0x0380..0x0FFF rezervat pentru extensii
 // 0x1000..0x7FFF (~28 KB) rezervat pentru log inelar de udări (etapă viitoare)
 
 #define NODE_CONFIG_SIZE          128
 #define REG_PARAMS_SIZE           64
 #define NODE_STATS_SIZE           64
+#define SYS_CONFIG_SIZE           64
 
 // ---------- Autentificare (cod de acces) ----------
 //
@@ -206,6 +217,12 @@ unsigned long phaseStartTime = 0;
 // `doseLastMl` reţine doza ultimă (folosit la finalizare pt. statistici).
 unsigned long doseDurationMs = 0;   // 0 = udare manuală (fără auto-stop)
 uint16_t      doseLastMl     = 0;
+
+// Debitul activ al pompei [ml/s]. Iniţializat cu valoarea de fabrică; la boot,
+// dacă EEPROM-ul are un debit salvat valid, e suprascris în loadFlowRate().
+// Endpoint-ul POST /flow-rate îl actualizează aici ŞI în EEPROM. TOATE
+// conversiile ml ↔ durată pompă folosesc această variabilă.
+float pumpFlowMlPerSec = PUMP_FLOW_DEFAULT;
 
 uint8_t currentWifiChannel = 1;
 
@@ -329,6 +346,19 @@ typedef struct __attribute__((packed)) {
   uint8_t  reserved[41];
 } NodeStats;                      // 64 B
 
+// Config GLOBAL al sistemului (nu per nod). Pentru moment ţine doar debitul
+// pompei (ml/s), calibrat o singură dată pe ansamblul hub-pompă-furtun şi
+// editabil din dashboard (tab Setări). `valid` = 1 marchează un slot scris
+// corect; la slot gol (0x00) sau invalid, firmware-ul foloseşte
+// PUMP_FLOW_DEFAULT. flowMlPerSec × 100 e stocat ca întreg ca să evităm
+// reprezentarea binară float în EEPROM (ex: 321 = 3.21 ml/s).
+// 1×uint8 + 1×uint16 = 3 B; reserved[61] => 64 B total.
+typedef struct __attribute__((packed)) {
+  uint8_t  valid;                 // 1 = slot scris valid, 0 = gol
+  uint16_t flowMlPerSecX100;      // debit × 100 (ex: 321 = 3.21 ml/s)
+  uint8_t  reserved[61];
+} SystemConfig;                   // 64 B
+
 // ---------- Stare provisioning (BLE) ----------
 
 BLEServer*         bleServer       = nullptr;
@@ -451,6 +481,10 @@ void setup() {
   i2cScan();
   // Iniţializăm layout-ul (header + slot-uri zero la prima pornire).
   storageInit();
+
+  // Debitul pompei: dacă EEPROM-ul e OK şi conţine un debit salvat valid,
+  // îl încarcă în pumpFlowMlPerSec; altfel rămâne valoarea de fabrică.
+  loadFlowRate();
 
   // Rezumat status module — apare in /diagnostics.
   bootLogf("OLED  - %s\n", oledOk      ? "OK" : "lipsa");
