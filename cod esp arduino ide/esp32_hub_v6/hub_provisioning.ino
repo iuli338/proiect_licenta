@@ -362,6 +362,7 @@ void loopNormal() {
     server.handleClient();
     updateConnectorDetection();
     updateWateringStateMachine();
+    autoWateringEvaluate();        // regulator PI automat (decizie udare)
     checkWifiReconnect();
     rtcUpdateCache();
   }

@@ -53,6 +53,140 @@ void stopWatering() {
   phaseStartTime = millis();
 }
 
+// ============================================================
+//  Regulator PI automat — decizie de udare per port
+//  Implementeaza fidel misc/decizie_udare_diagrama.svg.
+// ============================================================
+//
+// Apelata periodic din loopNormal (autoWateringEvaluate). Pentru fiecare port
+// confirmat + configurat + cu auto-udare activata, ruleaza un "tick" de
+// regulator la fiecare REG_TICK_MS. Algoritmul (vezi diagrama):
+//   h  = umiditate masurata; dt = minute de la ultima udare
+//   1. dt >= safety_max         -> UDARE FORTATA (target_dose_ml)
+//   2. dt <  ANTI_TWITCH        -> NU UDA (cooldown)
+//   3. e = setpoint - h; daca e>0: I += Ki·e·Δt  (acumulez datoria de apa)
+//   4. h > setpoint - hist      -> NU UDA (solul are inca apa)
+//   5. dt <  T_min              -> NU UDA (asteptam cadenta biologica)
+//   6. doza = clamp(max(Kp·e + I, target_dose_ml), 5, 200) -> UDARE; I = 0
+
+// Minute de la ultima udare a portului (din NodeStats.lastWatering + RTC).
+// Daca nu avem RTC sau nu s-a udat niciodata, intoarce un numar foarte mare
+// (tratam ca "demult", deci cadenta/safety sunt satisfacute).
+static uint32_t minutesSinceLastWatering(const char* name) {
+  if (!rtcOk) return 0xFFFFFFFFUL;
+  uint32_t now = rtcEpoch();
+  NodeStats st;
+  if (!storageLoadStats(name, st) || st.lastWatering == 0 || now == 0) {
+    return 0xFFFFFFFFUL;
+  }
+  if (now <= st.lastWatering) return 0;
+  return (now - st.lastWatering) / 60U;
+}
+
+// Ruleaza un tick de regulator pentru un singur port. Intoarce true daca a
+// declansat o udare (caz in care apelantul nu mai evalueaza alte porturi in
+// acelasi tur — un singur port udat simultan).
+static bool autoWateringTickPort(int port) {
+  const char* name = portName[port];
+
+  // Conditii de baza: port confirmat fizic, cu senzor proaspat.
+  if (!portConfirmed[port] || name[0] == '\0') return false;
+  if (portSensors[port].lastUpdateMs == 0) return false;   // niciun SENSE inca
+  float h = portSensors[port].soilMoisturePct;
+  if (isnan(h) || h < 0) return false;                     // senzor sol absent
+
+  // Config + parametri din EEPROM; auto-udare trebuie sa fie activata.
+  NodeConfig cfg; RegParams rp;
+  if (!storageLoadConfig(name, cfg) || !cfg.configured) return false;
+  if (!storageLoadParams(name, rp) || !rp.autoWateringEnabled) return false;
+
+  float setpoint   = rp.setpoint10  / 10.0f;
+  float histerezis = rp.hysteresis10 / 10.0f;
+  uint32_t T_min   = rp.tMinMin;
+  uint32_t safety  = rp.safetyMaxMin;
+  uint16_t target  = rp.targetDoseMl;
+  float Kp = rp.Kp, Ki = rp.Ki;
+
+  uint32_t dt = minutesSinceLastWatering(name);   // minute de la ultima udare
+  float& I = portReg[port].integralMl;            // acumulator integral [ml]
+
+  // --- 1. SAFETY MAX: prea mult fara udare -> udare fortata cu target ---
+  if (dt >= safety) {
+    uint16_t doza = target;
+    if (doza < DOSE_MIN_ML) doza = DOSE_MIN_ML;
+    if (doza > DOSE_MAX_ML) doza = DOSE_MAX_ML;
+    Serial.printf("[AUTO %s] SAFETY (dt=%lumin >= %lumin) -> udare fortata %u ml\n",
+                  name, (unsigned long)dt, (unsigned long)safety, doza);
+    startWatering(port, doza);
+    I = 0;   // reset anti-windup
+    return true;
+  }
+
+  // --- 2. ANTI-TWITCH: am udat foarte recent -> cooldown ---
+  if (dt < ANTI_TWITCH_MIN) {
+    return false;
+  }
+
+  // --- 3. Acumulare integrala (doar cat timp avem deficit, e>0) ---
+  float e = setpoint - h;          // eroare [%]
+  if (e > 0) {
+    I += Ki * e * REG_DT_H;        // Ki [ml/(%·h)] · e [%] · Δt [h] = [ml]
+    // Clamp anti-windup: integrala nu poate depasi doza maxima utila.
+    if (I > DOSE_MAX_ML) I = DOSE_MAX_ML;
+  }
+  if (I < 0) I = 0;
+
+  // --- 4. Histerezis: solul inca are destula apa -> nu uda ---
+  if (h > setpoint - histerezis) {
+    return false;
+  }
+
+  // --- 5. Cadenta biologica: nu a trecut inca T_min -> asteptam ---
+  if (dt < T_min) {
+    return false;
+  }
+
+  // --- 6. Calcul doza PI + udare + reset integrala ---
+  float doza_pi = Kp * e + I;
+  float doza = doza_pi > target ? doza_pi : target;
+  if (doza < DOSE_MIN_ML) doza = DOSE_MIN_ML;
+  if (doza > DOSE_MAX_ML) doza = DOSE_MAX_ML;
+  uint16_t dozaMl = (uint16_t)(doza + 0.5f);
+
+  Serial.printf("[AUTO %s] UDARE PI: h=%.1f%% e=%.1f%% I=%.1fml Kp=%.3f Ki=%.4f "
+                "-> doza=%u ml (dt=%lumin)\n",
+                name, h, e, I, Kp, Ki, dozaMl, (unsigned long)dt);
+  startWatering(port, dozaMl);
+  I = 0;   // reset anti-windup dupa udare
+  return true;
+}
+
+// Evaluata periodic din loopNormal. Ruleaza tick-uri de regulator la
+// REG_TICK_MS pentru porturile eligibile. Sare complet daca o udare (manuala
+// sau automata) e deja in curs — un singur port udat simultan.
+void autoWateringEvaluate() {
+  if (wateringPhase != PHASE_IDLE) return;   // udare in curs -> nu pornim alta
+  if (!eepromReady) return;                  // fara EEPROM nu avem config/params
+  // Fara RTC nu putem calcula cadenta (dt) corect: minutesSinceLastWatering ar
+  // intoarce mereu "demult" si udarea automata ar declansa la fiecare safety.
+  // RTC-ul e deci obligatoriu pentru udarea automata sigura.
+  if (!rtcOk) return;
+
+  unsigned long now = millis();
+  for (int p = 0; p < NUM_PORTS; p++) {
+    // Tick doar daca a trecut REG_TICK_MS de la ultimul tick al portului.
+    if (portReg[p].lastTickMs != 0 && (now - portReg[p].lastTickMs) < REG_TICK_MS) {
+      continue;
+    }
+    portReg[p].lastTickMs = now;
+    if (autoWateringTickPort(p)) {
+      // A declansat o udare — ne oprim (un singur port simultan). Celelalte
+      // porturi vor fi evaluate la urmatoarele tick-uri, dupa ce udarea se termina.
+      break;
+    }
+  }
+}
+
 void updateWateringStateMachine() {
 
   unsigned long now = millis();

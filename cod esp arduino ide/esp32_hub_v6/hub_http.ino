@@ -13,19 +13,23 @@ static String jsonFloat(float v, int decimals) {
   return String(buf);
 }
 
-// Predictie "Următoarea udare" — identic algoritmic cu Python
-// node_config.predict_next_watering. Întoarce true + populează out_* dacă
-// putem prezice, false altfel.
+// Predictie "Următoarea udare" — proiecteaza in viitor ACELASI regulator PI
+// care decide udarea (vezi autoWateringTickPort + misc/decizie_udare_diagrama).
+// Estimeaza CAND vor fi indeplinite conditiile de udare ale PI-ului si CE doza
+// ar livra atunci, ca afisajul din dashboard sa fie coerent cu ce face firmware-ul.
 //
-// Logica:
-//   t_prag    = τ · ln(h / (setpoint - histerezis))    [ore → min]
-//   t_cadenta = T_min - dt_ultima_udare                 [min]
-//   t_safety  = safety_max - dt_ultima_udare            [min]
-//   t_principal = max(t_prag, t_cadenta)
-//   minutes_until = min(t_principal, t_safety)
+// Conditiile PI de udare: (dt >= T_min SI h <= setpoint-hist), sau dt >= safety.
+// Deci momentul = min(safety, max(t_prag, t_cadenta)):
+//   t_prag    = τ · ln(h / (setpoint - histerezis))    [ore → min]  (cand h scade sub prag)
+//   t_cadenta = T_min - dt                              [min]        (cand se atinge cadenta)
+//   t_safety  = safety_max - dt                         [min]        (override siguranta)
+// Doza estimata = clamp(max(Kp·e_estim + I_curent, target), 5, 200), unde e_estim
+// e eroarea proiectata la momentul udarii (≈ histerezis, h ≈ prag) si I_curent e
+// integrala acumulata de regulator pana acum (parametru `integral_ml`).
 static bool predictNextWatering(const RegParams& rp,
                                 float h_curent,
                                 uint32_t minutes_since_last,
+                                float integral_ml,
                                 uint32_t& out_minutes,
                                 uint16_t& out_dose_ml,
                                 const char*& out_reason) {
@@ -71,11 +75,14 @@ static bool predictNextWatering(const RegParams& rp,
   if (t_final < 0) t_final = 0;
   out_minutes = (uint32_t)(t_final + 0.5f);
 
-  // Doza estimată: max(Kp·histerezis, target), clamp 5..200
-  float doza = Kp * histerezis;
+  // Doza estimată — aceeasi formula ca regulatorul PI la momentul udarii:
+  // la atingerea pragului, h ≈ setpoint-hist, deci eroarea proiectata e_estim
+  // ≈ histerezis. doza = max(Kp·e_estim + I_curent, target), clamp 5..200.
+  float e_estim = histerezis;
+  float doza = Kp * e_estim + integral_ml;
   if (doza < target) doza = target;
-  if (doza < 5) doza = 5;
-  if (doza > 200) doza = 200;
+  if (doza < DOSE_MIN_ML) doza = DOSE_MIN_ML;
+  if (doza > DOSE_MAX_ML) doza = DOSE_MAX_ML;
   out_dose_ml = (uint16_t)(doza + 0.5f);
 
   return true;
@@ -313,7 +320,8 @@ void handleStatus() {
         uint16_t est_dose = 0;
         const char* reason = "";
         if (predictNextWatering(rp, portSensors[i].soilMoisturePct,
-                                mins_since, mins_until, est_dose, reason)) {
+                                mins_since, portReg[i].integralMl,
+                                mins_until, est_dose, reason)) {
           json += "{\"minutes_until\":";       json += mins_until;
           json += ",\"estimated_dose_ml\":";   json += est_dose;
           json += ",\"reason\":\"";            json += reason; json += "\"";

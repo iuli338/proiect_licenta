@@ -294,12 +294,19 @@ def predict_next_watering(reg: dict, soil_moisture_pct: float,
                           minutes_since_last: float) -> Optional[dict]:
     """Estimează momentul + doza pentru următoarea udare.
 
-    Identic algoritmic cu logica regulatorului din firmware (vezi
-    misc/decizie_udare_diagrama.svg). Se ia minimul dintre:
+    Proiectează în viitor ACELAŞI regulator PI care decide udarea pe firmware
+    (vezi misc/decizie_udare_diagrama.svg + autoWateringTickPort din
+    hub_watering.ino): estimează CÂND vor fi îndeplinite condiţiile de udare ale
+    PI-ului — (dt ≥ T_min ŞI h ≤ setpoint-hist), sau dt ≥ safety_max. Momentul e
+    minimul dintre:
       - timpul până umiditatea cade sub (setpoint - histerezis) — modelul
         exponenţial h(t) = h_curent · e^(-t/τ)
       - timpul rămas până la T_min (cadenţa biologică)
-    şi se limitează sus de safety_max (override siguranţă).
+    limitat sus de safety_max (override siguranţă).
+
+    Notă: pe live, predicţia afişată vine direct din firmware (care include şi
+    integrala PI acumulată în doză). Aici, în mock, integrala nu e disponibilă,
+    deci doza estimată foloseşte doar termenul proporţional (e_estim ≈ histerezis).
 
     Args:
       reg: dict-ul de regulator (cum vine din derive_regulator).
@@ -373,10 +380,10 @@ def predict_next_watering(reg: dict, soil_moisture_pct: float,
     if minutes_until == float("inf"):
         return None
 
-    # Estimarea dozei: la momentul udării, eroarea va fi h_at_udare faţă de
-    # setpoint. Pentru simplitate folosim umiditatea la momentul atingerii
-    # pragului ≈ prag, deci eroarea ≈ histerezis. PI livrează:
-    # doza = max(Kp · histerezis, target_dose_ml), clamp.
+    # Estimarea dozei — aceeaşi formulă ca regulatorul PI la momentul udării:
+    # la atingerea pragului, h ≈ setpoint-hist, deci eroarea proiectată ≈
+    # histerezis. doza = max(Kp · e_estim + I, target_dose_ml), clamp. În mock
+    # nu avem integrala acumulată a firmware-ului, deci I ≈ 0 (doar termenul P).
     e_estim = histerezis
     doza_pi = Kp * e_estim
     estimated_dose = max(doza_pi, target_dose)

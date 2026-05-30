@@ -70,6 +70,23 @@
 #define VALVE_OPEN_DELAY  2000  // ms intre deschidere valva si pornire pompa
 #define PUMP_STOP_DELAY   1000  // ms intre oprire pompa si inchidere valva
 
+// ---------- Regulator PI automat (vezi misc/decizie_udare_diagrama.svg) ----------
+//
+// Tick-ul regulatorului se evalueaza periodic in loopNormal pentru fiecare port
+// confirmat+configurat cu auto-udare activata. Pasul Δt e mare (dinamica solului
+// e in ore), dar configurabil mai jos pentru testare.
+// TESTARE: pentru a verifica declansarea pe placa fara a astepta ore, scurteaza
+// temporar REG_TICK_MS (ex 5000 = 5 s) si, in EEPROM/dashboard, tMinMin/safetyMaxMin
+// la cateva minute. Lasa valorile reale in productie (dinamica solului e in ore).
+#define REG_TICK_MS       (10UL * 60UL * 1000UL)  // 10 min — pas regulator (Δt)
+#define ANTI_TWITCH_MIN   360U   // 6 h — nu udam din nou daca am udat foarte recent
+#define DOSE_MIN_ML       5      // clamp inferior doza automata [ml]
+#define DOSE_MAX_ML       200    // clamp superior doza automata [ml]
+// Pas integral in minute (Δt din formula I += Ki·e·Δt). Tinut separat de
+// REG_TICK_MS ca, daca scurtam tick-ul pentru testare, integrala sa ramana
+// in aceeasi unitate (ore) ca acordarea IMC a lui Ki [ml/(%·h)].
+#define REG_DT_H          (10.0f / 60.0f)   // 10 min exprimat in ore
+
 // Debitul pompei — valoarea IMPLICITĂ de fabrică, în ml/s. Calibrat empiric
 // pe banc (3 măsurători de 100 ml). La pornire, dacă EEPROM-ul conţine un
 // debit salvat valid, acesta îl suprascrie pe cel implicit în variabila
@@ -263,6 +280,17 @@ typedef struct {
 } NodeSensors;
 
 NodeSensors portSensors[NUM_PORTS] = {};
+
+// Stare regulator PI per port — pastrata in RAM (se pierde la reboot; integrala
+// reporneste de la 0, ceea ce e sigur dupa o intrerupere). `integralMl` este
+// acumulatorul I [ml] din diagrama (I += Ki·e·Δt cat timp e>0). `lastTickMs`
+// marcheaza ultimul tick de regulator pentru a respecta pasul REG_TICK_MS.
+typedef struct {
+  float         integralMl;     // acumulator integral I [ml]
+  unsigned long lastTickMs;     // millis() la ultimul tick evaluat
+} RegState;
+
+RegState portReg[NUM_PORTS] = {};
 
 // ---------- Structuri EEPROM ----------
 //
