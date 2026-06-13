@@ -42,20 +42,13 @@
   --shadow-glow-mint:
     0 0 0 1px rgba(184, 240, 201, 0.22),
     0 14px 40px rgba(0, 0, 0, 0.55);
+
+  /* ---- Overlay + topbar mai negre pe varianta dark a dashboard-ului ---- */
+  --color-overlay-dash: rgba(0, 0, 0, 0.80);
+  --color-topbar-bg:    rgba(6, 14, 10, 0.82);
 }
 
 /* Fundalul paginii foloseşte noul ton întunecat. */
 .page-dashboard {
   background-color: var(--color-bg-deep);
-}
-
-/* Overlay-ul de întunecare: mai discret acum, fiindcă întunecarea
-   reală e dată de token-urile temei, nu de un strat negru opac. */
-.page-dashboard::before {
-  background-color: rgba(0, 0, 0, 0.80);
-}
-
-/* Topbar-ul — armonizat cu noul fundal mai negru. */
-.page-dashboard .topbar {
-  background: rgba(6, 14, 10, 0.82);
 }

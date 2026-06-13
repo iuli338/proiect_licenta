@@ -38,8 +38,19 @@ Imagini ale tipurilor de sol din catalog.
 Imaginile de sol sunt fotografii de produs preluate de pe site-urile
 producătorilor, folosite în scop ilustrativ.
 
-### Note de licenţă
+## Imagini de fundal (`static/`)
+
+Fotografii de fundal pentru pagini, comutate în funcţie de temă.
+
+| Fişier | Folosire | Autor | Sursă |
+|---|---|---|---|
+| `light-background2.jpg` | Fundal temă light — dashboard | Mansy Graphics | [Unsplash](https://unsplash.com/photos/abstract-white-background-with-soft-curves-GKXuFCd2fYo) |
+
+## Note de licenţă
 
 - **pngtree.com** — necesită atribuire pentru contul gratuit:
   `png image from pngtree.com/`
 - **Vecteezy** — necesită atribuire: `... PNGs by Vecteezy`
+- **Unsplash** — fotografie de [Mansy Graphics](https://unsplash.com/@mansygraphics)
+  pe [Unsplash](https://unsplash.com/photos/abstract-white-background-with-soft-curves-GKXuFCd2fYo);
+  licenţa Unsplash nu impune atribuire, dar o includem din curtoazie.

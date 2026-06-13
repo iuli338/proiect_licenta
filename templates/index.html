@@ -10,6 +10,9 @@
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}" />
   <meta name="description" content="Sistem inteligent de irigare pentru plantele tale de apartament. Senzori dedicați, algoritm de control fundamentat experimental, dashboard intuitiv." />
 
+  {# theme.js — sincron în <head>, aplică tema înainte de prima pictare. #}
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
+
   <link rel="stylesheet" href="{{ url_for('static', filename='global_styles.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='index.css') }}" />
 </head>
@@ -29,12 +32,15 @@
         Dropwise
       </a>
 
-      <ul class="nav__links" role="list">
-        <li><a href="{{ url_for('pages.home') }}"     class="nav__link" aria-current="page">Acasă</a></li>
-        <li><a href="#functii"       class="nav__link">Funcționalități</a></li>
-        <li><a href="#despre"        class="nav__link">Despre proiect</a></li>
-        <li><a href="#dashboard-cta" class="nav__link">Dashboard</a></li>
-      </ul>
+      <div class="nav__right">
+        <ul class="nav__links" role="list">
+          <li><a href="{{ url_for('pages.home') }}"     class="nav__link" aria-current="page">Acasă</a></li>
+          <li><a href="#functii"       class="nav__link">Funcționalități</a></li>
+          <li><a href="#despre"        class="nav__link">Despre proiect</a></li>
+          <li><a href="#dashboard-cta" class="nav__link">Dashboard</a></li>
+        </ul>
+        {% include 'partials/theme_toggle.html' %}
+      </div>
     </nav>
   </header>
 

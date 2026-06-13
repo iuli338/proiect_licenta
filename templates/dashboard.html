@@ -7,6 +7,10 @@
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}" />
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}" />
 
+  {# theme.js — sincron în <head> ca tema să fie aplicată pe <html> înainte
+     de prima pictare (evită flash-ul de temă greşită). #}
+  <script src="{{ url_for('static', filename='theme.js') }}"></script>
+
   <link rel="stylesheet" href="{{ url_for('static', filename='global_styles.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='dashboard.css') }}" />
   <link rel="stylesheet" href="{{ url_for('static', filename='setup.css') }}" />
@@ -120,9 +124,11 @@
         </button>
       </nav>
 
-      {# Coloana dreaptă — goală; păstrată ca taburile să rămână centrate
-         în grila topbar-ului (auto | 1fr | auto). #}
-      <div class="topbar__right" aria-hidden="true"></div>
+      {# Coloana dreaptă — comutatorul de temă; păstrează grila topbar-ului
+         (auto | 1fr | auto) echilibrată faţă de brand-ul din stânga. #}
+      <div class="topbar__right">
+        {% include 'partials/theme_toggle.html' %}
+      </div>
 
     </div>
   </header>

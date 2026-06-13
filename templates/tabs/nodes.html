@@ -74,6 +74,28 @@
                 <button type="button" data-value="mediu">Mediu</button>
                 <button type="button" data-value="ridicat">Ridicat</button>
               </div>
+              <p class="field__hint">Cât de umed ţinem solul (setpoint-ul).</p>
+            </div>
+            <div class="field">
+              <label class="field__label" for="plant-custom-class">
+                Tipul de udare
+              </label>
+              <select class="field__input field__select" id="plant-custom-class">
+                {# Opţiunile sunt populate din /api/catalog (watering_classes). #}
+              </select>
+              <p class="field__hint">Cât de des şi câtă apă primeşte planta.</p>
+              {# Infobox — explică pe scurt clasa aleasă; text actualizat din JS. #}
+              <div class="info-box" id="plant-class-info">
+                <span class="info-box__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                       stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path d="M12 11 v5"/>
+                    <circle cx="12" cy="8" r="0.6" fill="currentColor"/>
+                  </svg>
+                </span>
+                <span class="info-box__text" id="plant-class-info-text"></span>
+              </div>
             </div>
           </div>
 

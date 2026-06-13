@@ -672,6 +672,9 @@
    */
   function setPlantImage(img, plantId, plantName) {
     const src = '/static/plants/' + plantId + '.png';
+    // Marcăm placeholder-ul generic (planta custom) ca să-l putem reda gri
+    // pe tema light — vezi .node-card__img--placeholder în nodes.css.
+    img.classList.toggle('node-card__img--placeholder', plantId === 'custom');
     if (img.getAttribute('src') === src) return;
     img.onerror = () => { img.hidden = true; };
     img.onload = () => { img.hidden = false; };
@@ -1222,13 +1225,31 @@
     return chartJsPromise;
   }
 
-  // Config per metrică: label, unitate, culoare linie, formatter tick.
+  // Citeşte o variabilă CSS de temă (ex: '--chart-tick') de pe <html>.
+  // Graficele Chart.js sunt pe canvas, nu moştenesc CSS-ul, aşa că le citim
+  // explicit la randare şi reconstruim graficele la schimbarea temei.
+  function themeColor(varName, fallback) {
+    const v = getComputedStyle(document.documentElement)
+      .getPropertyValue(varName).trim();
+    return v || fallback;
+  }
+
+  // Config per metrică: unitate + variabila CSS pentru culoarea liniei.
+  // Culoarea efectivă se rezolvă la randare prin themeColor() ca să urmeze tema.
   const GRAPH_METRICS = {
-    soil_moisture_pct: { unit: '%',  color: 'rgba(184,240,201,1)' },
-    lux:               { unit: 'lx', color: 'rgba(255,204,102,1)' },
-    air_temp_c:        { unit: '°C', color: 'rgba(140,200,255,1)' },
-    air_humidity_pct:  { unit: '%',  color: 'rgba(255,160,200,1)' },
+    soil_moisture_pct: { unit: '%',  colorVar: '--chart-soil' },
+    lux:               { unit: 'lx', colorVar: '--chart-lux' },
+    air_temp_c:        { unit: '°C', colorVar: '--chart-temp' },
+    air_humidity_pct:  { unit: '%',  colorVar: '--chart-humidity' },
   };
+
+  /** Transformă o culoare 'rgba(r,g,b,1)' în varianta cu alpha dat (pt. fill). */
+  function withAlpha(rgba, alpha) {
+    return rgba.replace(/rgba?\(([^)]+)\)/, function (_, inner) {
+      const parts = inner.split(',').map((s) => s.trim());
+      return 'rgba(' + parts[0] + ',' + parts[1] + ',' + parts[2] + ',' + alpha + ')';
+    });
+  }
 
   // ---------- Mod istoric vs. live pe pagina Grafice ----------
   //
@@ -1426,10 +1447,29 @@
     // fără re-fetch.
     currentGraphCtx = { nodeName: nodeName, chartLib, nodeCfg, samples };
 
-    // Construim labels + data pentru modul ISTORIC iniţial. Funcţia de
-    // refresh-uire reconstruieşte ambele baze de date (istoric+live) când
-    // utilizatorul comută toggle-ul.
-    const built = buildGraphSeries('history', samples);
+    // Construim graficele pentru modul curent. Extras într-o funcţie ca să
+    // poată fi reapelat la schimbarea temei (reconstruim cu noile culori,
+    // fără re-fetch — folosim currentGraphCtx deja populat).
+    renderChartsFromCtx();
+    setGraphLoading(false);
+    graphViewOpening = false;
+  }
+
+  /** (Re)construieşte graficele Chart.js din currentGraphCtx, pentru modul
+      curent (istoric/live) şi tema activă. Distruge graficele existente.
+      Apelat la deschiderea paginii şi la schimbarea temei. */
+  function renderChartsFromCtx() {
+    const view = document.getElementById('node-graph');
+    if (!view || !currentGraphCtx || !currentGraphCtx.chartLib) return;
+    const chartLib = currentGraphCtx.chartLib;
+    const nodeCfg  = currentGraphCtx.nodeCfg;
+
+    // Curăţăm graficele anterioare înainte de a reconstrui.
+    activeCharts.forEach((c) => c.destroy());
+    activeCharts = [];
+
+    const built = buildGraphSeries(currentGraphMode,
+      currentGraphMode === 'history' ? currentGraphCtx.samples : null);
     const labels = built.labels;
 
     function alignedData(metricKey) { return built.byMetric[metricKey] || []; }
@@ -1478,13 +1518,14 @@
       // Pentru graficele cu legendă (cele cu referinţe), datasetul principal
       // primeşte şi un label vizibil — apare în legendă, dar e marcat
       // _locked = true, deci click-ul pe el e ignorat (rămâne mereu vizibil).
+      const lineColor = themeColor(cfg.colorVar, 'rgba(184,240,201,1)');
       const datasets = [{
         label: metric === 'lux' ? 'Lux'
              : metric === 'soil_moisture_pct' ? 'Umiditate sol'
              : '',
         data: data,
-        borderColor: cfg.color,
-        backgroundColor: cfg.color.replace('1)', '0.15)'),
+        borderColor: lineColor,
+        backgroundColor: withAlpha(lineColor, '0.15'),
         fill: true,
         tension: 0.35,
         pointRadius: 2,
@@ -1499,7 +1540,7 @@
         datasets.push(referenceLine(
           'Setpoint (' + setpoint + ' %)',
           setpoint,
-          'rgba(255,255,255,0.6)'));
+          themeColor('--chart-ref', 'rgba(255,255,255,0.6)')));
       }
       // Pentru lux, liniile Min/Max sunt adăugate ÎNTOTDEAUNA dar
       // `hidden: true` iniţial — utilizatorul le activează din legendă
@@ -1509,7 +1550,7 @@
           const ds = referenceLine(
             'Minim (' + luxMin + ' lx)',
             luxMin,
-            'rgba(255,138,138,0.7)');
+            themeColor('--color-danger-soft', 'rgba(255,138,138,0.7)'));
           ds.hidden = true;
           datasets.push(ds);
         }
@@ -1517,7 +1558,7 @@
           const ds = referenceLine(
             'Maxim (' + luxMax + ' lx)',
             luxMax,
-            'rgba(255,138,138,0.7)');
+            themeColor('--color-danger-soft', 'rgba(255,138,138,0.7)'));
           ds.hidden = true;
           datasets.push(ds);
         }
@@ -1525,6 +1566,14 @@
 
       // Avem legendă dacă există cel puţin o linie de referinţă (oricare).
       const hasRefLines = datasets.length > 1;
+
+      // Culori de temă pentru axe / grilă / legendă / tooltip — rezolvate la
+      // randare. Graficele se reconstruiesc la schimbarea temei (vezi mai jos).
+      const cTick    = themeColor('--chart-tick', 'rgba(255,255,255,0.5)');
+      const cGrid    = themeColor('--chart-grid', 'rgba(255,255,255,0.05)');
+      const cLegend  = themeColor('--chart-legend', 'rgba(255,255,255,0.7)');
+      const cTipBg   = themeColor('--chart-tooltip-bg', 'rgba(13,31,23,0.95)');
+      const cTipBord = themeColor('--chart-tooltip-border', 'rgba(255,255,255,0.1)');
 
       const c = new chartLib(canvas, {
         type: 'line',
@@ -1541,7 +1590,7 @@
                   position: 'top',
                   align: 'end',
                   labels: {
-                    color: 'rgba(255,255,255,0.7)',
+                    color: cLegend,
                     font: { size: 10 },
                     boxWidth: 18,
                     boxHeight: 2,
@@ -1559,8 +1608,10 @@
                 }
               : { display: false },
             tooltip: {
-              backgroundColor: 'rgba(13,31,23,0.95)',
-              borderColor: 'rgba(255,255,255,0.1)',
+              backgroundColor: cTipBg,
+              borderColor: cTipBord,
+              titleColor: cLegend,
+              bodyColor: cLegend,
               borderWidth: 1,
               padding: 10,
               // Filtrăm tooltip-ul ca să apară doar valoarea reală,
@@ -1576,24 +1627,21 @@
           },
           scales: {
             x: {
-              ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 }, maxRotation: 0 },
-              grid:  { color: 'rgba(255,255,255,0.05)' },
+              ticks: { color: cTick, font: { size: 10 }, maxRotation: 0 },
+              grid:  { color: cGrid },
             },
             y: {
               ticks: {
-                color: 'rgba(255,255,255,0.5)', font: { size: 10 },
+                color: cTick, font: { size: 10 },
                 callback: (v) => v + ' ' + cfg.unit,
               },
-              grid:  { color: 'rgba(255,255,255,0.05)' },
+              grid:  { color: cGrid },
             },
           },
         },
       });
       activeCharts.push(c);
     });
-
-    setGraphLoading(false);
-    graphViewOpening = false;
   }
 
   /** Comută între starea de loading (card central) şi conţinutul real
@@ -1738,6 +1786,15 @@
       resizeTimer = setTimeout(() => {
         if (nodes.syncHistoryCardWidth) nodes.syncHistoryCardWidth();
       }, 120);
+    });
+
+    // Schimbarea temei (light/dark): graficele sunt pe canvas şi nu moştenesc
+    // CSS-ul, deci le reconstruim cu noile culori dacă pagina Grafice e deschisă.
+    window.addEventListener('dropwise:theme-changed', () => {
+      const view = document.getElementById('node-graph');
+      if (view && !view.hidden && currentGraphCtx) {
+        renderChartsFromCtx();
+      }
     });
 
     // Buton "Vezi diagnostica" pe cardul hub din Monitor.

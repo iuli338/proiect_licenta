@@ -23,7 +23,7 @@
 .modal__error {
   margin-bottom: var(--space-4);
   font-size: var(--fs-sm);
-  color: #ffb4b4;
+  color: var(--color-danger-soft);
 }
 
 /* În dialogul de cod, butonul ocupă toată lăţimea. */

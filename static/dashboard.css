@@ -20,12 +20,18 @@
   flex-direction: column;
 }
 
+/* Tema light — fotografie abstractă luminoasă (Unsplash, Mansy Graphics;
+   vezi ATTRIBUTIONS.md). Diferită de cea de pe pagina home. */
+:root[data-theme='light'] .page-dashboard {
+  background-image: url('light-background2.jpg');
+}
+
 /* Întunecare mai accentuată pentru densitate vizuală pe dashboard */
 .page-dashboard::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.40);
+  background-color: var(--color-overlay-dash);
   pointer-events: none;
   z-index: 0;
 }
@@ -41,7 +47,7 @@
   position: sticky;
   top: 0;
   z-index: 50;
-  background: rgba(13, 31, 23, 0.78);
+  background: var(--color-topbar-bg);
   backdrop-filter: blur(14px) saturate(1.2);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
   border-bottom: 1px solid var(--color-border-soft);
@@ -179,7 +185,7 @@
 
 .tab__badge--todo {
   background: rgba(255, 200, 80, 0.15);
-  color: #ffcc66;
+  color: var(--color-warn);
 }
 
 /* ----- Zonă dreapta: status hub + meniu user ----- */
@@ -312,7 +318,7 @@
   background: rgba(255, 204, 102, 0.08);
   border: 1px solid rgba(255, 204, 102, 0.25);
   border-radius: var(--radius-md);
-  color: #ffd98a;
+  color: var(--color-warn-soft);
   font-size: var(--fs-sm);
   line-height: 1.5;
 }
@@ -325,7 +331,7 @@
 }
 
 .todo-banner strong {
-  color: #ffcc66;
+  color: var(--color-warn);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;

@@ -46,13 +46,13 @@
   margin-bottom: var(--space-5);
   background: rgba(239, 100, 100, 0.10);
   border-color: rgba(239, 100, 100, 0.30);
-  color: #ffb4b4;
+  color: var(--color-danger-soft);
   font-size: var(--fs-sm);
   padding: var(--space-4) var(--space-5);
 }
 
 .control-offline .status-pill__led {
-  background: #ef6464;
+  background: var(--color-danger);
   box-shadow: 0 0 6px rgba(239, 100, 100, 0.6);
 }
 
@@ -142,11 +142,11 @@
 .gpio-btn[data-state='pending'] {
   background: rgba(255, 204, 102, 0.14);
   border-color: rgba(255, 204, 102, 0.5);
-  color: #ffd98a;
+  color: var(--color-warn-soft);
 }
 
 .gpio-btn[data-state='pending'] .gpio-btn__state {
-  color: #ffd98a;
+  color: var(--color-warn-soft);
 }
 
 /* ---------- 3. Diagrama hidraulică ---------- */
@@ -250,7 +250,7 @@
 /* Variantă de avertizare — galben */
 .modal__icon--warn {
   background: rgba(255, 204, 102, 0.14);
-  color: #ffcc66;
+  color: var(--color-warn);
 }
 
 .modal__title {
@@ -372,11 +372,11 @@
 .water-btn[data-state='pending'] {
   background: rgba(255, 204, 102, 0.14);
   border-color: rgba(255, 204, 102, 0.5);
-  color: #ffd98a;
+  color: var(--color-warn-soft);
 }
 
 .water-btn[data-state='pending'] .water-btn__state {
-  color: #ffd98a;
+  color: var(--color-warn-soft);
 }
 
 /* Indisponibil — port neconfirmat sau alt port se udă */

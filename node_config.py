@@ -185,6 +185,25 @@ WATERING_CLASS_KEYS = tuple(_WATERING_CLASSES.keys())
 # custom). "Echilibrat" e cea mai sigură — cadenţă moderată, doză moderată.
 _WATERING_CLASS_DEFAULT = "echilibrat"
 
+
+def watering_classes_public() -> list[dict]:
+    """Clasele de udare expuse spre UI (wizard, plantă custom).
+
+    Ordinea e de la cea mai rară la cea mai frecventă — aşa apare şi în
+    selector. Întoarce doar câmpurile relevante pentru afişare (cheie, label,
+    exemple, doză ţintă), nu şi parametrii interni (λ etc.).
+    """
+    return [
+        {
+            "key": key,
+            "label": cls["label"],
+            "exemple": cls["exemple"],
+            "target_dose_ml": cls["target_dose_ml"],
+            "default": key == _WATERING_CLASS_DEFAULT,
+        }
+        for key, cls in _WATERING_CLASSES.items()
+    ]
+
 # Safety pe firmware: max timp fără udare = 1.2× T_min (override doar la
 # întârziere > 20%). Vezi simulare/proces.py.
 _SAFETY_MAX_FACTOR = 1.2

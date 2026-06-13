@@ -234,6 +234,7 @@
     grid.appendChild(makeChoice('Altă plantă', 'adaugă manual', () => {
       markChosen(grid, '__custom__');
       show(document.getElementById('plant-custom'));
+      buildWateringClassSelect();   // populează selectorul + infobox
       wiz.plant = null;
       document.getElementById('plant-next').disabled = true;
       syncPlantCustom();
@@ -250,8 +251,15 @@
     const form = document.getElementById('plant-custom');
     if (custom) {
       show(form);
+      buildWateringClassSelect();   // populează selectorul + infobox
       document.getElementById('plant-custom-name').value = wiz.plant.name;
       setLevel('water', wiz.plant.water_need);
+      // Pre-completăm clasa de udare salvată (fallback la default).
+      const sel = document.getElementById('plant-custom-class');
+      if (sel) {
+        sel.value = wiz.plant.watering_class || DEFAULT_WCLASS;
+        updateClassInfo();
+      }
     } else {
       hide(form);
     }
@@ -282,6 +290,54 @@
     return !over;
   }
 
+  // ---------- Tip de udare (clasa) pentru planta custom ----------
+
+  /** Clasa de udare implicită — fallback dacă nu vine din catalog. */
+  const DEFAULT_WCLASS = 'echilibrat';
+
+  /** Populează selectorul de tip de udare din catalog (o singură dată). */
+  function buildWateringClassSelect() {
+    const sel = document.getElementById('plant-custom-class');
+    if (!sel || sel.dataset.built) return;
+    const classes = (nodes.catalog && nodes.catalog.watering_classes) || [];
+    if (!classes.length) return;   // catalog nu e încărcat încă
+    sel.innerHTML = '';
+    classes.forEach((c) => {
+      const opt = document.createElement('option');
+      opt.value = c.key;
+      opt.textContent = c.label;
+      if (c.default) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    sel.dataset.built = '1';
+    sel.addEventListener('change', () => {
+      updateClassInfo();
+      syncPlantCustom();
+    });
+    updateClassInfo();
+  }
+
+  /** Actualizează infobox-ul cu descrierea clasei de udare alese. */
+  function updateClassInfo() {
+    const sel = document.getElementById('plant-custom-class');
+    const txt = document.getElementById('plant-class-info-text');
+    if (!sel || !txt) return;
+    const classes = (nodes.catalog && nodes.catalog.watering_classes) || [];
+    const c = classes.find((x) => x.key === sel.value);
+    if (!c) { txt.textContent = ''; return; }
+    txt.innerHTML =
+      '<strong>' + c.label + '</strong> — doză ţintă ' + c.target_dose_ml +
+      ' ml. Tipul de udare stabileşte cât de des udăm şi cât de mult: ' +
+      'plantele rare (suculente) primesc apă din plin, dar la intervale mari; ' +
+      'cele frecvente primesc doze mici, des. Exemple: ' + c.exemple + '.';
+  }
+
+  /** Valoarea curentă a clasei de udare din selector (sau default). */
+  function currentWateringClass() {
+    const sel = document.getElementById('plant-custom-class');
+    return (sel && sel.value) || DEFAULT_WCLASS;
+  }
+
   /** Citeşte formularul de plantă custom şi validează. */
   function syncPlantCustom() {
     const name = document.getElementById('plant-custom-name').value.trim();
@@ -291,7 +347,7 @@
     const ok = name && lvl && fits;
     wiz.plant = ok
       ? { id: 'custom', name: name, water_need: lvl,
-          watering_class: 'echilibrat', custom: true }
+          watering_class: currentWateringClass(), custom: true }
       : null;
     document.getElementById('plant-next').disabled = !ok;
   }

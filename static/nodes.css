@@ -45,6 +45,12 @@
   object-fit: contain;
 }
 
+/* Tema light: imaginea placeholder (planta custom) e desaturată la gri,
+   ca să nu iasă strident pe fundalul deschis. Plantele reale rămân color. */
+:root[data-theme='light'] .node-card__img--placeholder {
+  filter: grayscale(1) opacity(0.6);
+}
+
 /* Nod neconfigurat — accent de avertizare */
 .node-card[data-state='unconfigured'] {
   border-color: rgba(255, 204, 102, 0.35);
@@ -207,11 +213,11 @@
 
 /* Variantă "periculoasă" (ex: Resetare) — text roşu, hover roşu mai intens. */
 .node-card__menu-item--danger {
-  color: #ff8a8a;
+  color: var(--color-danger-soft);
 }
 .node-card__menu-item--danger:hover {
   background: rgba(239, 100, 100, 0.12);
-  color: #ff6464;
+  color: var(--color-danger-bright);
 }
 
 
@@ -222,17 +228,37 @@
   text-transform: uppercase;
   padding: 3px 8px;
   border-radius: var(--radius-sm);
+  /* Border transparent implicit — pe light, badge-ul "activ" îl colorează,
+     fără a modifica dimensiunea celorlalte badge-uri (rămân aliniate). */
+  border: 1px solid transparent;
 }
 
 .node-card__badge--warn {
   background: rgba(255, 204, 102, 0.16);
-  color: #ffcc66;
+  color: var(--color-warn);
 }
 
 /* Badge "activ" — în nuanţa cardului. */
 .node-card__badge--ok {
   background: hsl(var(--node-accent, 152 60% 70%) / 0.18);
   color: hsl(var(--node-accent, 152 60% 70%));
+}
+
+/* ---- Tema light: accentul cardului e pastel deschis (lightness 62-74%),
+   ilizibil ca text pe cardul alb-crem. Pe light păstrăm culoarea cardului,
+   dar: fundal pal din nuanţă, BORDER accentuat în aceeaşi nuanţă, iar textul
+   = versiunea ÎNTUNECATĂ a culorii cardului (accent amestecat cu negru prin
+   color-mix — păstrează hue/saturation, coboară lightness). ---- */
+:root[data-theme='light'] .node-card__badge--ok {
+  background: hsl(var(--node-accent, 152 60% 70%) / 0.16);
+  border: 1px solid hsl(var(--node-accent, 152 60% 70%) / 0.85);
+  color: color-mix(in srgb,
+    hsl(var(--node-accent, 152 60% 70%)) 55%, #000 45%);
+}
+
+:root[data-theme='light'] .node-card__badge--warn {
+  background: var(--color-warn-bg);
+  color: var(--color-warn);   /* warn e deja întunecat pe light (#b8860b) */
 }
 
 .node-card__hint,
@@ -318,7 +344,7 @@
   width: 14px;
   height: 14px;
   margin-right: var(--space-2);
-  color: #ffcc66;
+  color: var(--color-warn);
   cursor: help;
   flex-shrink: 0;
 }
@@ -370,7 +396,7 @@
 
 /* Mic accent vizual pe valoare când e în alertă. */
 .sensor-list__value--alert .sensor-list__num {
-  color: #ffcc66;
+  color: var(--color-warn);
 }
 
 /* Badge "Lipseşte" — afişat în locul valorii când senzorul respectiv
@@ -381,7 +407,7 @@
   border-radius: 999px;
   background: rgba(255, 110, 110, 0.14);
   border: 1px solid rgba(255, 110, 110, 0.32);
-  color: #ffb4b4;
+  color: var(--color-danger-soft);
   font-family: var(--font-body);
   font-size: var(--fs-xs);
   font-weight: 500;
@@ -540,7 +566,25 @@
 
 .choice[aria-selected='true'] {
   border-color: var(--color-mint);
-  background: rgba(184, 240, 201, 0.08);
+  background: var(--color-choice-selected, rgba(184, 240, 201, 0.08));
+}
+
+/* Tema light: verdele pal la 8% dispare pe fundalul alb-crem. Accentuăm
+   varianta selectată — border mai gros (mint), fundal mai prezent şi un
+   inel subtil, ca alegerea să iasă clar în evidenţă. */
+:root[data-theme='light'] .choice[aria-selected='true'] {
+  border-color: var(--color-mint);
+  border-width: 2px;
+  /* Compensăm cei +1px de border ca să nu sară layout-ul. */
+  padding: calc(var(--space-5) - 1px);
+  background: color-mix(in srgb, var(--color-mint) 14%, var(--color-bg-elevated));
+  box-shadow: 0 0 0 1px var(--color-mint), var(--shadow-sm);
+}
+
+/* Cardul "Altă plantă / Alt sol" îşi păstrează conturul punctat la selecţie,
+   dar accentuat pe light prin inelul mint. */
+:root[data-theme='light'] .choice--add[aria-selected='true'] {
+  border-style: dashed;
 }
 
 /* Imaginea plantei în stânga cardului de alegere. */
@@ -654,6 +698,54 @@
   font-weight: 600;
 }
 
+/* Hint scurt sub un câmp (ex: ce înseamnă "Necesar de apă"). */
+.field__hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--color-text-faint);
+}
+
+/* Dropdown nativ stilizat ca un field__input. */
+.field__select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%23888' stroke-width='1.6' d='M1 1.5 L6 6.5 L11 1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  padding-right: calc(var(--space-3) * 2 + 12px);
+}
+
+/* Infobox explicativ — sub selectorul de tip de udare. */
+.info-box {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-mint) 10%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--color-mint) 30%, transparent);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.info-box__icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  color: var(--color-mint);
+}
+
+.info-box__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.info-box__text strong {
+  color: var(--color-text);
+}
+
 /* ---------- 6. Sumar parametri ----------
 
    Layout pe grupuri: header colorat per categorie (Sol / Plantă / Udare /
@@ -726,27 +818,27 @@
 }
 
 .summary-list__header[data-group='planta'] {
-  border-left-color: #ffcc66;
-  color: #ffcc66;
+  border-left-color: var(--color-warn);
+  color: var(--color-warn);
 }
 .summary-list__item[data-group='planta']::before {
-  background: #ffcc66;
+  background: var(--color-warn);
 }
 
 .summary-list__header[data-group='udare'] {
-  border-left-color: #ba9ce8;
-  color: #ba9ce8;
+  border-left-color: var(--color-accent-violet);
+  color: var(--color-accent-violet);
 }
 .summary-list__item[data-group='udare']::before {
-  background: #ba9ce8;
+  background: var(--color-accent-violet);
 }
 
 .summary-list__header[data-group='functionare'] {
-  border-left-color: #8cc8ff;
-  color: #8cc8ff;
+  border-left-color: var(--color-accent-blue);
+  color: var(--color-accent-blue);
 }
 .summary-list__item[data-group='functionare']::before {
-  background: #8cc8ff;
+  background: var(--color-accent-blue);
 }
 
 /* ---------- 7. Culori card ---------- */
@@ -765,6 +857,9 @@
   /* Culoarea reală e setată din JS (background: hsl(...)). */
   background: var(--color-mint);
   border: 3px solid transparent;
+  /* Inel subtil ca swatch-urile aproape de culoarea fundalului (alb pe light,
+     negru pe dark) să rămână delimitate, nu să se topească în fundal. */
+  box-shadow: 0 0 0 1px var(--color-border);
   cursor: pointer;
   transition: transform var(--dur-fast) var(--ease-out);
 }
@@ -775,7 +870,9 @@
 
 .color-swatch[aria-selected='true'] {
   border-color: var(--color-text);
-  box-shadow: 0 0 0 2px var(--color-bg-deep) inset;
+  /* Inel interior (separă borderul de culoare) + inel exterior de delimitare. */
+  box-shadow: 0 0 0 2px var(--color-bg-deep) inset,
+              0 0 0 1px var(--color-border);
 }
 
 /* ---------- 8. Vedere statistici nod ---------- */
@@ -881,13 +978,13 @@
   background: var(--color-mint);
 }
 .params-section[data-group='planta'] .params-section__title::before {
-  background: #ffcc66;
+  background: var(--color-warn);
 }
 .params-section[data-group='udare'] .params-section__title::before {
-  background: #ba9ce8;
+  background: var(--color-accent-violet);
 }
 .params-section[data-group='functionare'] .params-section__title::before {
-  background: #8cc8ff;
+  background: var(--color-accent-blue);
 }
 
 /* Lista de parametri — perechi etichetă (+ hint) / valoare. */
@@ -983,7 +1080,7 @@
   background: rgba(255, 204, 102, 0.10);
   border: 1px solid rgba(255, 204, 102, 0.30);
   border-radius: var(--radius-md);
-  color: #ffd98a;
+  color: var(--color-warn-soft);
 }
 
 /* Inputuri numerice — în loc de valoarea read-only.
@@ -1025,7 +1122,7 @@
 }
 
 .params-input--invalid {
-  border-color: #ef6464;
+  border-color: var(--color-danger);
 }
 .params-input--invalid:focus {
   box-shadow: 0 0 0 2px rgba(239, 100, 100, 0.20);
@@ -1150,7 +1247,7 @@
 .params-toast[data-kind='error'] {
   background: rgba(239, 100, 100, 0.10);
   border: 1px solid rgba(239, 100, 100, 0.40);
-  color: #ff8a8a;
+  color: var(--color-danger-soft);
 }
 
 
@@ -1179,11 +1276,11 @@
   box-shadow: 0 0 10px var(--color-mint);
 }
 .hub-card[data-state='offline'] .hub-card__led {
-  background: #ef6464;
+  background: var(--color-danger);
   box-shadow: 0 0 8px rgba(239, 100, 100, 0.6);
 }
 .hub-card[data-state='pending'] .hub-card__led {
-  background: #ffcc66;
+  background: var(--color-warn);
 }
 
 .hub-card__main {
@@ -1293,7 +1390,7 @@
   font-family: var(--font-display);
   font-size: var(--fs-md);
   font-weight: 600;
-  color: #ff8a8a;
+  color: var(--color-danger-soft);
 }
 
 .stats-error__msg {
@@ -1348,7 +1445,7 @@
   font-family: var(--font-display);
   font-size: var(--fs-md);
   font-weight: 600;
-  color: #ff8a8a;
+  color: var(--color-danger-soft);
 }
 
 .reconfig-error__msg {
@@ -1553,7 +1650,7 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #ef6464;
+  background: var(--color-danger);
   border: 2px solid var(--color-bg-deep);
   box-shadow: 0 0 8px rgba(239, 100, 100, 0.6);
 }
@@ -1658,11 +1755,11 @@
 .diag-pill[data-state='missing'] {
   background: rgba(255, 138, 138, 0.10);
   border-color: rgba(255, 138, 138, 0.30);
-  color: #ff8a8a;
+  color: var(--color-danger-soft);
 }
 .diag-pill[data-state='missing']::before {
   content: '○';
-  color: #ff8a8a;
+  color: var(--color-danger-soft);
 }
 
 .diag-pill--neutral {
@@ -1731,7 +1828,7 @@
   font-family: var(--font-display);
   font-size: var(--fs-lg);
   font-weight: 600;
-  color: #ff8a8a;
+  color: var(--color-danger-soft);
 }
 
 .reset-dialog__lead,
@@ -1745,10 +1842,18 @@
 
 .reset-dialog__warn {
   padding: var(--space-3) var(--space-4);
-  background: rgba(239, 100, 100, 0.10);
+  background: var(--color-danger-bg);
   border: 1px solid rgba(239, 100, 100, 0.30);
   border-radius: var(--radius-md);
-  color: #ffb0b0;
+  color: var(--color-danger-soft);
+}
+
+/* Tema light: roşul-deschis hardcodat era ilizibil pe caseta roz-pal.
+   Text roşu închis + fundal puţin mai prezent pentru delimitare clară. */
+:root[data-theme='light'] .reset-dialog__warn {
+  background: var(--color-danger-bg);
+  border-color: color-mix(in srgb, var(--color-danger) 35%, transparent);
+  color: var(--color-danger);
 }
 
 .reset-dialog__actions {
@@ -1760,7 +1865,7 @@
 
 /* Butonul de confirmare e roşu, nu mint — semn că nu e o acţiune obişnuită. */
 .reset-dialog__confirm {
-  background: #ef6464;
+  background: var(--color-danger);
   color: white;
   box-shadow: 0 8px 24px rgba(239, 100, 100, 0.30);
 }
@@ -1838,7 +1943,7 @@
 .reset-toast[data-kind='warn'] {
   background: rgba(255, 204, 102, 0.14);
   border: 1px solid rgba(255, 204, 102, 0.40);
-  color: #ffd98a;
+  color: var(--color-warn-soft);
   backdrop-filter: blur(8px);
 }
 .reset-toast[data-kind='warn'] .reset-toast__icon {
@@ -1848,7 +1953,7 @@
 .reset-toast[data-kind='error'] {
   background: rgba(239, 100, 100, 0.14);
   border: 1px solid rgba(239, 100, 100, 0.40);
-  color: #ff8a8a;
+  color: var(--color-danger-soft);
   backdrop-filter: blur(8px);
 }
 .reset-toast[data-kind='error'] .reset-toast__icon {

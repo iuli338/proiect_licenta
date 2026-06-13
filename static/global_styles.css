@@ -30,6 +30,38 @@
   --color-text-faint:  rgba(244, 248, 245, 0.55);
   --color-text-on-mint: #0d1f17;
 
+  /* Overlay peste imaginea de fundal + fundalul barelor (header/topbar).
+     Tokenizate ca să poată fi inversate pe tema light. */
+  --color-overlay:     rgba(0, 0, 0, 0.25);   /* wash peste fundalul home */
+  --color-overlay-dash: rgba(0, 0, 0, 0.40);  /* wash peste fundalul dashboard */
+  --color-header-bg:   rgba(13, 31, 23, 0.72);  /* bara home (sticlă) */
+  --color-topbar-bg:   rgba(13, 31, 23, 0.78);  /* bara dashboard (sticlă) */
+
+  /* Culori de stare (semantice) — folosite la avertismente / erori / accente
+     în carduri şi grafice. Tokenizate ca să rămână lizibile pe ambele teme. */
+  --color-warn:        #ffcc66;   /* avertisment (galben) */
+  --color-warn-soft:   #ffd98a;   /* avertisment, text mai pal */
+  --color-danger:      #ef6464;   /* eroare / pericol (roşu) */
+  --color-danger-soft: #ffb4b4;   /* eroare, text pal pe fundal închis */
+  --color-danger-bright: #ff6464;
+  --color-accent-violet: #ba9ce8; /* accent grafic (umiditate aer etc.) */
+  --color-accent-blue:   #8cc8ff; /* accent grafic (lux etc.) */
+  --color-warn-bg:     rgba(255, 204, 102, 0.10);  /* fundal bloc avertisment */
+  --color-danger-bg:   rgba(239, 100, 100, 0.10);
+
+  /* Grafice (Chart.js) — citite din JS prin getComputedStyle la randare.
+     Linii de date + axe/grilă/tooltip, inversate pe tema light. */
+  --chart-soil:        rgba(184, 240, 201, 1);   /* umiditate sol */
+  --chart-lux:         rgba(255, 204, 102, 1);   /* lumină */
+  --chart-temp:        rgba(140, 200, 255, 1);   /* temperatură aer */
+  --chart-humidity:    rgba(255, 160, 200, 1);   /* umiditate aer */
+  --chart-tick:        rgba(255, 255, 255, 0.55);
+  --chart-grid:        rgba(255, 255, 255, 0.07);
+  --chart-legend:      rgba(255, 255, 255, 0.72);
+  --chart-ref:         rgba(255, 255, 255, 0.60);  /* linia de setpoint */
+  --chart-tooltip-bg:  rgba(13, 31, 23, 0.95);
+  --chart-tooltip-border: rgba(255, 255, 255, 0.12);
+
   /* Tipografie */
   --font-display: 'Fraunces', 'Georgia', serif;
   --font-body:    'Manrope', system-ui, sans-serif;
@@ -89,6 +121,104 @@
   /* Layout */
   --container-max: 1280px;
   --container-pad: clamp(1.25rem, 4vw, 3rem);
+
+  /* Schema de culoare nativă a controalelor (scrollbar, form widgets). */
+  color-scheme: dark;
+}
+
+/* ============================================================
+   TEMA LIGHT — activată prin [data-theme="light"] pe <html>.
+   Suprascrie DOAR token-urile de culoare; tipografia, spaţierea,
+   formele şi duratele rămân moştenite din :root. theme.js setează
+   atributul înainte de prima pictare (fără flash).
+   ============================================================ */
+:root[data-theme='light'] {
+  /* Fundaluri — verde foarte deschis, aerisit */
+  --color-bg-deep:     #eef4ee;
+  --color-bg-base:     #f4f8f3;
+  --color-bg-elevated: #ffffff;
+
+  /* Suprafeţe de sticlă — tentă închisă subtilă peste fundalul deschis */
+  --color-surface:        rgba(13, 31, 23, 0.05);
+  --color-surface-strong: rgba(13, 31, 23, 0.09);
+  --color-border:         rgba(13, 31, 23, 0.16);
+  --color-border-soft:    rgba(13, 31, 23, 0.09);
+
+  /* Verzi de accent — saturaţi mai mult ca să iasă pe alb */
+  --color-leaf-dark:   #1e4630;
+  --color-leaf:        #2f7048;
+  --color-leaf-bright: #2c8a55;
+  --color-mint:        #2e9b63;   /* accent principal — verde viu pe alb */
+  --color-mint-soft:   #3aab70;
+
+  /* Text — închis pe fundal deschis */
+  --color-text:        #112318;
+  --color-text-muted:  rgba(17, 35, 24, 0.74);
+  --color-text-faint:  rgba(17, 35, 24, 0.52);
+  --color-text-on-mint: #ffffff;   /* text alb pe butoane verzi pline */
+
+  /* Overlay + bare — fotografia light (crizantemă albă) e deja foarte
+     luminoasă, aşa că washul e subtil: doar cât să nu obosească ochiul,
+     lăsând petalele vizibile. Conţinutul stă pe carduri (glass), nu direct
+     pe fotografie, deci lizibilitatea vine din carduri, nu din overlay. */
+  --color-overlay:      rgba(255, 255, 255, 0.18);
+  --color-overlay-dash: rgba(255, 255, 255, 0.22);
+  --color-header-bg:    rgba(252, 254, 252, 0.78);
+  --color-topbar-bg:    rgba(252, 254, 252, 0.82);
+
+  /* Culori de stare — nuanţe mai întunecate ca să fie lizibile pe alb */
+  --color-warn:        #b8860b;   /* chihlimbar închis (galbenul pal dispare pe alb) */
+  --color-warn-soft:   #9a7209;
+  --color-danger:      #c0392b;
+  --color-danger-soft: #b03a2e;
+  --color-danger-bright: #a93226;
+  --color-accent-violet: #7b52c0;
+  --color-accent-blue:   #2b7fd0;
+  --color-warn-bg:     rgba(184, 134, 11, 0.12);
+  --color-danger-bg:   rgba(192, 57, 43, 0.10);
+
+  /* Grafice pe tema light — linii mai saturate, axe/grilă închise pe alb */
+  --chart-soil:        rgba(46, 155, 99, 1);
+  --chart-lux:         rgba(193, 138, 0, 1);
+  --chart-temp:        rgba(43, 127, 208, 1);
+  --chart-humidity:    rgba(199, 80, 140, 1);
+  --chart-tick:        rgba(17, 35, 24, 0.62);
+  --chart-grid:        rgba(17, 35, 24, 0.10);
+  --chart-legend:      rgba(17, 35, 24, 0.75);
+  --chart-ref:         rgba(17, 35, 24, 0.45);
+  --chart-tooltip-bg:  rgba(255, 255, 255, 0.97);
+  --chart-tooltip-border: rgba(17, 35, 24, 0.15);
+
+  /* Umbre — mai discrete pe fundal deschis (negru cu opacitate mică) */
+  --shadow-sm: 0 2px 8px rgba(17, 35, 24, 0.08);
+  --shadow-md: 0 8px 24px rgba(17, 35, 24, 0.12);
+  --shadow-lg: 0 24px 60px rgba(17, 35, 24, 0.16);
+  --shadow-glow-mint: 0 0 0 1px rgba(46, 155, 99, 0.30), 0 12px 40px rgba(46, 155, 99, 0.18);
+
+  color-scheme: light;
+}
+
+/* Pe tema light, varianta "dark dashboard" din dashboard_theme.css ar
+   re-întuneca pagina. O neutralizăm: dashboard-ul în light foloseşte
+   aceiaşi token-uri light, doar cu overlay/topbar uşor diferite. */
+:root[data-theme='light'] .page-dashboard {
+  --color-bg-deep:     #eef4ee;
+  --color-bg-base:     #f4f8f3;
+  --color-bg-elevated: #ffffff;
+  --color-surface:        rgba(13, 31, 23, 0.05);
+  --color-surface-strong: rgba(13, 31, 23, 0.09);
+  --color-border:         rgba(13, 31, 23, 0.16);
+  --color-border-soft:    rgba(13, 31, 23, 0.09);
+  --color-leaf-dark:   #1e4630;
+  --color-leaf:        #2f7048;
+  --color-leaf-bright: #2c8a55;
+  --color-text:        #112318;
+  --color-text-muted:  rgba(17, 35, 24, 0.74);
+  --color-text-faint:  rgba(17, 35, 24, 0.52);
+  --color-text-on-mint: #ffffff;
+  --color-overlay-dash: rgba(255, 255, 255, 0.22);
+  --color-topbar-bg:    rgba(252, 254, 252, 0.82);
+  --shadow-glow-mint: 0 0 0 1px rgba(46, 155, 99, 0.30), 0 12px 40px rgba(46, 155, 99, 0.18);
 }
 
 /* ---------- 3. Reset & baza ---------- */
@@ -340,6 +470,12 @@ p {
   color: var(--color-bg-deep);
 }
 
+.nav__right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+}
+
 .nav__links {
   display: flex;
   gap: var(--space-7);
@@ -376,6 +512,44 @@ p {
 .nav__link[aria-current='page']::after {
   width: 100%;
 }
+
+/* ---------- 8b. Comutator temă (light / dark) ---------- */
+.theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background-color var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+}
+
+.theme-toggle:hover {
+  color: var(--color-text);
+  background: var(--color-surface-strong);
+  border-color: var(--color-border);
+}
+
+.theme-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Cele două iconiţe stau suprapuse; afişăm doar pe cea relevantă.
+   Implicit (dark) arătăm soarele = "treci pe light". */
+.theme-toggle__moon { display: none; }
+.theme-toggle__sun  { display: block; }
+
+/* Pe tema light arătăm luna = "treci pe dark". */
+:root[data-theme='light'] .theme-toggle__sun  { display: none; }
+:root[data-theme='light'] .theme-toggle__moon { display: block; }
 
 /* ---------- 9. Footer ---------- */
 .footer {

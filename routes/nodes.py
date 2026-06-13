@@ -30,6 +30,9 @@ def api_catalog():
         "colors": catalog["colors"],
         "water_need_levels": list(nc.WATER_NEED_LEVELS),
         "retention_levels": list(nc.RETENTION_LEVELS),
+        # Clasele de udare (cadenţă biologică) — pentru selectorul din
+        # formularul de plantă custom al wizardului.
+        "watering_classes": nc.watering_classes_public(),
     })
 
 

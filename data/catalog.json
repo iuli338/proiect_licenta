@@ -141,6 +141,16 @@
       "id": "soare",
       "name": "Galben soare",
       "accent": "50 85% 64%"
+    },
+    {
+      "id": "alb",
+      "name": "Alb",
+      "accent": "0 0% 96%"
+    },
+    {
+      "id": "negru",
+      "name": "Negru",
+      "accent": "210 12% 22%"
     }
   ]
 }
