@@ -37,9 +37,9 @@
 #define SOIL_POWER_PIN   26
 #define SOIL_MOISTURE_PIN 34
 
-// Calibrare ADC sol — valori măsurate cu senzorul nostru capacitiv pe 10
+// Calibrare ADC sol — valori măsurate cu senzorul nostru rezistiv pe 10
 // zile de experiment cu 2 udări controlate (vezi misc/soil_data_complete.csv).
-// ADC-ul scade când substratul se udă (capacitiv: dielectric ↑ → frecvenţă ↓).
+// ADC-ul scade când substratul se udă (rezistiv: umiditate ↑ → rezistenţă ↓).
 //   • DRY = 4050  — sol complet uscat în ghiveci, înainte de udare
 //                   (observat: 4048-4072 stabil pe idx 440-490)
 //   • WET = 2270  — saturaţie maximă imediat după udare

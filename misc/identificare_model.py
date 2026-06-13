@@ -14,7 +14,7 @@ umiditatea solului dintr-un ghiveci.
 
 1. Semnalul de proces — de la raw la umiditate %
 ------------------------------------------------
-Senzorul capacitiv dă `soil_moisture_raw` INVERS faţă de umiditate şi e
+Senzorul rezistiv dă `soil_moisture_raw` INVERS faţă de umiditate şi e
 puternic neliniar la capete (saturează spre ADC = 4095). Identificarea pe
 raw brut dă un câştig contradictoriu (vezi prima rulare: K = 64 vs 20).
 De aceea îl convertim întâi în umiditate procentuală, pe o scală liniară:
@@ -80,7 +80,7 @@ if hasattr(sys.stdout, "reconfigure"):
 # Volumele celor 2 udări controlate din experiment, în ordine cronologică.
 VOLUM_UDARE_ML = (25.0, 75.0)
 
-# Capătul "uscat" al scalei: saturaţia ADC a senzorului capacitiv.
+# Capătul "uscat" al scalei: saturaţia ADC a senzorului rezistiv.
 RAW_USCAT = 4095.0
 
 # Salt minim de raw care marchează o udare reală (restul e zgomot de senzor).

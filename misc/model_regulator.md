@@ -10,7 +10,7 @@ Un ghiveci a fost monitorizat **10 zile** (16–26 martie 2026), cu un eșantion
 la fiecare ~10 minute — 1400 de măsurători valide. În acest interval s-au
 făcut **două udări controlate**: una de **25 ml** și una de **75 ml**.
 
-Mărimea de interes e `soil_moisture_raw`, citirea unui senzor capacitiv de
+Mărimea de interes e `soil_moisture_raw`, citirea unui senzor rezistiv de
 umiditate. Senzorul răspunde **invers** (raw mare = sol uscat, raw mic = sol
 umed) și e **neliniar la capete**, saturând spre valoarea ADC 4095.
 

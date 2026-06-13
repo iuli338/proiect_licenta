@@ -128,7 +128,7 @@
   <line x1="800" y1="540" x2="470" y2="540" class="fb" marker-end="url(#arrow)"/>
   <rect x="350" y="515" width="120" height="50" rx="4" class="box"/>
   <text x="410" y="537" text-anchor="middle" class="lbl">Senzor sol</text>
-  <text x="410" y="554" text-anchor="middle" class="sub">capacitiv → ESP-NOW</text>
+  <text x="410" y="554" text-anchor="middle" class="sub">rezistiv → ESP-NOW</text>
   <line x1="350" y1="540" x2="126" y2="540" class="fb"/>
   <line x1="126" y1="540" x2="126" y2="443" class="fb" marker-end="url(#arrow)"/>
   <text x="138" y="520" class="sub">h (măsurat)</text>
