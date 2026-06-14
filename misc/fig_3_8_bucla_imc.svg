@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560"
+     font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+    <style>
+      .box   { fill:#fff; stroke:#000; stroke-width:1.6; }
+      .src   { fill:#f0f0f0; stroke:#000; stroke-width:1.6; }
+      .acc   { fill:#e2e2e2; stroke:#000; stroke-width:1.6; }
+      .t     { font-size:14px; fill:#000; }
+      .tb    { font-size:15px; fill:#000; font-weight:700; }
+      .ts    { font-size:13px; fill:#000; }
+      .sym   { font-size:13px; fill:#000; font-family:'Cambria Math','Times New Roman',serif; }
+      .lab   { font-size:13px; fill:#000; font-style:italic; }
+      .ln    { stroke:#000; stroke-width:1.7; fill:none; }
+      .lnp   { stroke:#000; stroke-width:1.4; fill:none; stroke-dasharray:5 4; }
+    </style>
+  </defs>
+
+  <text x="450" y="30" text-anchor="middle" font-size="17" font-weight="700">Bucla de reglare parametrizată prin IMC</text>
+
+  <!-- =================== BUCLA PRINCIPALA (mijloc) =================== -->
+  <!-- r(t) -->
+  <text x="40" y="232" class="t">r(t)</text>
+  <text x="40" y="249" class="ts">setpoint</text>
+  <line x1="78" y1="236" x2="128" y2="236" class="ln" marker-end="url(#ar)"/>
+
+  <!-- Sumator -->
+  <circle cx="146" cy="236" r="18" class="box"/>
+  <text x="146" y="242" text-anchor="middle" font-size="19">Σ</text>
+  <text x="126" y="228" class="t">+</text>
+  <text x="150" y="272" class="t">−</text>
+
+  <!-- e(t) -->
+  <line x1="164" y1="236" x2="250" y2="236" class="ln" marker-end="url(#ar)"/>
+  <text x="207" y="227" text-anchor="middle" class="ts">e = r − y</text>
+
+  <!-- PI -->
+  <rect x="250" y="206" width="150" height="60" rx="5" class="acc"/>
+  <text x="325" y="231" text-anchor="middle" class="tb">Regulator PI</text>
+  <text x="325" y="252" text-anchor="middle" class="sym">K_p , K_i</text>
+
+  <!-- u(t) -->
+  <line x1="400" y1="236" x2="490" y2="236" class="ln" marker-end="url(#ar)"/>
+  <text x="445" y="227" text-anchor="middle" class="ts">u — doză [ml]</text>
+
+  <!-- Proces sol -->
+  <rect x="490" y="206" width="160" height="60" rx="5" class="box"/>
+  <text x="570" y="231" text-anchor="middle" class="tb">Proces sol</text>
+  <text x="570" y="252" text-anchor="middle" class="sym">K / (τ·s + 1)</text>
+
+  <!-- y(t) -->
+  <line x1="650" y1="236" x2="800" y2="236" class="ln" marker-end="url(#ar)"/>
+  <text x="775" y="227" text-anchor="middle" class="ts">y — umiditate</text>
+  <circle cx="720" cy="236" r="3.5" fill="#000"/>
+
+  <!-- feedback: y -> senzor -> sumator -->
+  <line x1="720" y1="236" x2="720" y2="330" class="ln"/>
+  <line x1="720" y1="330" x2="420" y2="330" class="ln"/>
+  <rect x="300" y="308" width="120" height="44" rx="5" class="box"/>
+  <text x="360" y="332" text-anchor="middle" class="t">Senzor sol</text>
+  <text x="360" y="347" text-anchor="middle" class="ts">măsoară y</text>
+  <line x1="300" y1="330" x2="146" y2="330" class="ln"/>
+  <line x1="146" y1="330" x2="146" y2="254" class="ln" marker-end="url(#ar)"/>
+  <text x="225" y="324" text-anchor="middle" class="ts">y măsurat</text>
+
+  <!-- =================== PARAMETRIZARE (sus) =================== -->
+  <!-- SOL -> model (K, tau) -->
+  <rect x="250" y="60" width="170" height="78" rx="5" class="src"/>
+  <text x="335" y="82" text-anchor="middle" class="tb">Tip SOL</text>
+  <text x="335" y="101" text-anchor="middle" class="ts">retenţie → model proces</text>
+  <text x="335" y="120" text-anchor="middle" class="sym">K = 1.5 %/ml ; τ = 31.7h × f</text>
+  <text x="335" y="134" text-anchor="middle" class="ts">f = 0.55 / 1.0 / 1.70</text>
+
+  <!-- PLANTA -> setpoint + lambda -->
+  <rect x="480" y="60" width="190" height="78" rx="5" class="src"/>
+  <text x="575" y="82" text-anchor="middle" class="tb">Tip PLANTĂ</text>
+  <text x="575" y="101" text-anchor="middle" class="ts">necesar apă → setpoint r</text>
+  <text x="575" y="118" text-anchor="middle" class="sym">r = 35 / 50 / 65 %</text>
+  <text x="575" y="133" text-anchor="middle" class="ts">clasă udare → λ (24…672 h)</text>
+
+  <!-- IMC tuning box (intre parametrizare si PI) -->
+  <rect x="330" y="158" width="260" height="30" rx="5" class="acc"/>
+  <text x="460" y="178" text-anchor="middle" class="sym">acordare IMC:  K_p = τ / (K·λ) ,  K_i = K_p / τ</text>
+
+  <!-- sageti SOL/PLANTA -> IMC (parametrizarea regulatorului) -->
+  <line x1="335" y1="138" x2="380" y2="158" class="ln" marker-end="url(#ar)"/>
+  <line x1="575" y1="138" x2="540" y2="158" class="ln" marker-end="url(#ar)"/>
+  <!-- IMC -> PI (coeficientii rezultati) -->
+  <line x1="460" y1="188" x2="392" y2="204" class="ln" marker-end="url(#ar)"/>
+  <text x="500" y="200" text-anchor="middle" class="ts">K_p, K_i</text>
+
+  <!-- =================== NOTA λ =================== -->
+  <rect x="40" y="400" width="820" height="120" rx="4" fill="#fafafa" stroke="#999" stroke-width="1"/>
+  <text x="52" y="422" class="tb" font-size="13">Principiul parametrizării (planificarea câştigului)</text>
+  <text x="52" y="446" class="ts">• Tipul de SOL fixează parametrii modelului procesului (câştigul K şi constanta de timp τ).</text>
+  <text x="52" y="468" class="ts">• Tipul de PLANTĂ fixează ţinta (setpoint-ul r) şi agresivitatea reglării prin parametrul λ.</text>
+  <text x="52" y="490" class="ts">• Coeficienţii regulatorului rezultă din model prin formulele IMC; λ mic → reglare promptă, λ mare → reglare prudentă.</text>
+  <text x="52" y="510" class="ts">• Acordarea (K_p, K_i) se calculează o singură dată, în prealabil, la configurarea nodului.</text>
+</svg>

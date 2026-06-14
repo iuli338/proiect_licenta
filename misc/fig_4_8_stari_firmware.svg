@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 740"
+     font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+    <style>
+      .st    { fill:#f0f0f0; stroke:#000; stroke-width:1.8; }
+      .stidle{ fill:#e2e2e2; stroke:#000; stroke-width:1.8; }
+      .tb    { font-size:16px; fill:#000; font-weight:700; }
+      .ts    { font-size:13px; fill:#000; }
+      .cond  { font-size:13px; fill:#000; }
+      .condb { font-size:12.5px; fill:#000; font-weight:600; }
+      .ln    { stroke:#000; stroke-width:1.7; fill:none; }
+      .lnemg { stroke:#000; stroke-width:1.5; fill:none; stroke-dasharray:5 4; }
+    </style>
+  </defs>
+
+  <text x="380" y="32" text-anchor="middle" font-size="17" font-weight="700">Diagrama de stări a firmware-ului hub-ului (ciclul de udare)</text>
+
+  <!-- START point -->
+  <circle cx="240" cy="70" r="9" fill="#000"/>
+  <line x1="240" y1="79" x2="240" y2="104" class="ln" marker-end="url(#ar)"/>
+
+  <!-- ===== IDLE ===== -->
+  <rect x="120" y="106" width="240" height="64" rx="8" class="stidle"/>
+  <text x="240" y="134" text-anchor="middle" class="tb">IDLE (repaus)</text>
+  <text x="240" y="155" text-anchor="middle" class="ts">pompă oprită · valve închise</text>
+
+  <!-- IDLE -> VALVE_OPENING -->
+  <line x1="240" y1="170" x2="240" y2="226" class="ln" marker-end="url(#ar)"/>
+  <rect x="248" y="183" width="300" height="34" fill="#fff"/>
+  <text x="252" y="195" class="condb">comandă de udare (port, doză)</text>
+  <text x="252" y="211" class="ts">automat de la regulator sau manual din dashboard</text>
+
+  <!-- ===== VALVE_OPENING ===== -->
+  <rect x="120" y="228" width="240" height="64" rx="8" class="st"/>
+  <text x="240" y="256" text-anchor="middle" class="tb">VALVE_OPENING</text>
+  <text x="240" y="277" text-anchor="middle" class="ts">deschide valva portului</text>
+
+  <!-- VALVE_OPENING -> PUMPING -->
+  <line x1="240" y1="292" x2="240" y2="348" class="ln" marker-end="url(#ar)"/>
+  <rect x="248" y="307" width="280" height="34" fill="#fff"/>
+  <text x="252" y="319" class="condb">după 2 s (VALVE_OPEN_DELAY)</text>
+  <text x="252" y="335" class="ts">valva e complet deschisă → pornește pompa</text>
+
+  <!-- ===== PUMPING ===== -->
+  <rect x="120" y="350" width="240" height="64" rx="8" class="st"/>
+  <text x="240" y="378" text-anchor="middle" class="tb">PUMPING</text>
+  <text x="240" y="399" text-anchor="middle" class="ts">pompă pornită · apa curge spre ghiveci</text>
+
+  <!-- PUMPING -> PUMP_STOPPING -->
+  <line x1="240" y1="414" x2="240" y2="470" class="ln" marker-end="url(#ar)"/>
+  <rect x="248" y="423" width="300" height="50" fill="#fff"/>
+  <text x="252" y="435" class="condb">doza livrată (durată = doză / debit)</text>
+  <text x="252" y="451" class="ts">— mod doză automat —</text>
+  <text x="252" y="467" class="cond">sau comanda <tspan font-style="italic">/water/stop</tspan> (udare manuală)</text>
+
+  <!-- ===== PUMP_STOPPING ===== -->
+  <rect x="120" y="472" width="240" height="64" rx="8" class="st"/>
+  <text x="240" y="500" text-anchor="middle" class="tb">PUMP_STOPPING</text>
+  <text x="240" y="521" text-anchor="middle" class="ts">oprește pompa (valva rămâne deschisă)</text>
+
+  <!-- PUMP_STOPPING -> IDLE (bucla pe stanga) -->
+  <path class="ln" d="M120,504 L60,504 L60,138 L120,138" marker-end="url(#ar)"/>
+  <rect x="6" y="300" width="108" height="70" fill="#fff"/>
+  <text x="60" y="316" text-anchor="middle" class="condb">după 1 s</text>
+  <text x="60" y="331" text-anchor="middle" class="ts">(PUMP_STOP_</text>
+  <text x="60" y="345" text-anchor="middle" class="ts">DELAY)</text>
+  <text x="60" y="361" text-anchor="middle" class="ts">închide valva</text>
+
+  <!-- inregistrare statistici (nota pe tranzitia spre IDLE) -->
+  <rect x="372" y="556" width="320" height="44" rx="6" fill="#fafafa" stroke="#999" stroke-width="1"/>
+  <text x="384" y="575" class="ts">La închiderea ciclului, udarea se înregistrează în</text>
+  <text x="384" y="591" class="ts">statisticile din EEPROM (nr. udări, ml livrați, ora).</text>
+
+  <!-- Oprire de urgenta: orice stare activa -> IDLE daca nodul e deconectat.
+       Arc amplu pe dreapta, departe de etichetele tranzitiilor din mijloc. -->
+  <path class="lnemg" d="M360,504 C690,470 690,180 360,140" marker-end="url(#ar)"/>
+  <rect x="556" y="318" width="200" height="44" fill="#fff"/>
+  <text x="656" y="334" text-anchor="middle" class="condb">oprire de urgență</text>
+  <text x="656" y="350" text-anchor="middle" class="ts">nod deconectat în udare</text>
+
+  <!-- Legenda -->
+  <rect x="40" y="624" width="680" height="98" rx="4" fill="#fafafa" stroke="#999" stroke-width="1"/>
+  <text x="52" y="646" class="condb" font-size="13">Note</text>
+  <text x="52" y="670" class="ts">• Tranziţiile temporizate (2 s, 1 s) lasă timp valvei să se deschidă/închidă înainte/după pornirea pompei.</text>
+  <text x="52" y="692" class="ts">• Un singur port este udat la un moment dat; o comandă nouă e ignorată cât timp starea nu este IDLE.</text>
+  <line x1="52" y1="712" x2="88" y2="712" class="lnemg"/><text x="96" y="716" class="ts">tranziţie de urgenţă (forţează revenirea în IDLE)</text>
+</svg>

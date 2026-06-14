@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1060 600"
+     font-family="'Segoe UI', Arial, sans-serif">
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7.5" markerHeight="7.5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+    <style>
+      .box   { fill:#fff; stroke:#000; stroke-width:1.6; }
+      .src   { fill:#f0f0f0; stroke:#000; stroke-width:1.6; }
+      .acc   { fill:#e2e2e2; stroke:#000; stroke-width:1.6; }
+      .gate  { fill:#fff; stroke:#000; stroke-width:1.6; }
+      .t     { font-size:13.5px; fill:#000; }
+      .tb    { font-size:14px; fill:#000; font-weight:700; }
+      .ts    { font-size:13px; fill:#000; }
+      .sym   { font-size:13px; fill:#000; font-family:'Cambria Math','Times New Roman',serif; }
+      .ln    { stroke:#000; stroke-width:1.6; fill:none; }
+      .lab   { font-size:11.5px; fill:#000; }
+    </style>
+  </defs>
+
+  <text x="470" y="30" text-anchor="middle" font-size="17" font-weight="700">Schema bloc a regulatorului (un ciclu de reglare, la ~10 min)</text>
+
+  <!-- ============ INTRARI (stanga) ============ -->
+  <rect x="30" y="70" width="180" height="92" rx="5" class="src"/>
+  <text x="120" y="92" text-anchor="middle" class="tb">Mărimi măsurate</text>
+  <text x="120" y="113" text-anchor="middle" class="sym">h — umiditate sol [%]</text>
+  <text x="120" y="133" text-anchor="middle" class="sym">dt — timp de la ultima udare</text>
+  <text x="120" y="152" text-anchor="middle" class="ts">(de la senzor / din statistici)</text>
+
+  <rect x="30" y="230" width="180" height="110" rx="5" class="src"/>
+  <text x="120" y="252" text-anchor="middle" class="tb">Parametri (EEPROM)</text>
+  <text x="120" y="273" text-anchor="middle" class="sym">setpoint r, histerezis</text>
+  <text x="120" y="292" text-anchor="middle" class="sym">K_p, K_i</text>
+  <text x="120" y="311" text-anchor="middle" class="sym">T_min, doză ţintă</text>
+  <text x="120" y="330" text-anchor="middle" class="sym">safety_max</text>
+
+  <!-- ============ EROARE ============ -->
+  <circle cx="290" cy="200" r="20" class="box"/>
+  <text x="290" y="206" text-anchor="middle" font-size="18">Σ</text>
+  <!-- h -> sumator (-) : intra sus-stanga, tip la (270,194) -->
+  <path class="ln" d="M210,116 L250,116 L250,194 L270,194" marker-end="url(#ar)"/>
+  <text x="278" y="190" class="t" font-weight="700">−</text>
+  <!-- r -> sumator (+) : intra jos-stanga, tip la (270,206) -->
+  <path class="ln" d="M210,270 L250,270 L250,206 L270,206" marker-end="url(#ar)"/>
+  <text x="277" y="216" class="t" font-weight="700">+</text>
+  <text x="232" y="263" class="ts">r</text>
+  <text x="232" y="110" class="ts">h</text>
+  <!-- e -> pana la punctul de bifurcatie (NU continua dupa) -->
+  <line x1="310" y1="200" x2="335" y2="200" class="ln"/>
+  <circle cx="335" cy="200" r="3.5" fill="#000"/>
+  <rect x="258" y="162" width="64" height="16" fill="#fff"/>
+  <text x="290" y="175" text-anchor="middle" class="ts">e = r − h</text>
+
+  <!-- ============ TERMEN P + I ============ -->
+  <rect x="360" y="138" width="170" height="50" rx="5" class="acc"/>
+  <text x="445" y="159" text-anchor="middle" class="tb">Termen P</text>
+  <text x="445" y="178" text-anchor="middle" class="sym">K_p · e</text>
+
+  <rect x="360" y="212" width="170" height="62" rx="5" class="acc"/>
+  <text x="445" y="232" text-anchor="middle" class="tb">Termen I (integral)</text>
+  <text x="445" y="251" text-anchor="middle" class="sym">I += K_i · e · Δt</text>
+  <text x="445" y="267" text-anchor="middle" class="ts">doar dacă e &gt; 0 · anti-windup</text>
+
+  <!-- e -> P si I : pleaca vertical din punctul de bifurcatie (335,200) -->
+  <path class="ln" d="M335,200 L335,163 L360,163" marker-end="url(#ar)"/>
+  <path class="ln" d="M335,200 L335,240 L360,240" marker-end="url(#ar)"/>
+
+  <!-- Sumator P+I (ambele intrari +) -->
+  <circle cx="580" cy="200" r="18" class="box"/>
+  <text x="580" y="206" text-anchor="middle" font-size="17">Σ</text>
+  <line x1="530" y1="163" x2="562" y2="194" class="ln" marker-end="url(#ar)"/>
+  <text x="566" y="189" class="t" font-weight="700">+</text>
+  <line x1="530" y1="243" x2="562" y2="208" class="ln" marker-end="url(#ar)"/>
+  <text x="565" y="219" class="t" font-weight="700">+</text>
+  <line x1="598" y1="200" x2="632" y2="200" class="ln" marker-end="url(#ar)"/>
+  <text x="615" y="192" text-anchor="middle" class="sym">u</text>
+
+  <!-- ============ CLAMP DOZA ============ -->
+  <rect x="632" y="172" width="190" height="56" rx="5" class="box"/>
+  <text x="727" y="193" text-anchor="middle" class="tb">Limitare doză</text>
+  <text x="727" y="212" text-anchor="middle" class="sym">clamp(max(u, ţintă), 5, 200)</text>
+
+  <!-- ============ GATING (jos) ============ -->
+  <rect x="360" y="320" width="410" height="92" rx="5" class="gate"/>
+  <text x="565" y="341" text-anchor="middle" class="tb">Condiţii de declanşare</text>
+  <text x="372" y="362" class="sym">dt ≥ safety_max  →  udare forţată (doză ţintă)</text>
+  <text x="372" y="380" class="sym">dt &lt; 6h (anti-oscilaţie)  sau  h &gt; r − hist  →  NU udă</text>
+  <text x="372" y="398" class="sym">dt &lt; T_min  →  aşteaptă cadenţa</text>
+
+  <!-- ============ IESIRE (dreapta) ============ -->
+  <rect x="888" y="156" width="158" height="90" rx="5" class="acc"/>
+  <text x="967" y="184" text-anchor="middle" class="tb">Element de execuţie</text>
+  <text x="967" y="206" text-anchor="middle" class="sym">t = doză / Q</text>
+  <text x="967" y="226" text-anchor="middle" class="ts">pompă + valvă</text>
+  <line x1="822" y1="200" x2="888" y2="200" class="ln" marker-end="url(#ar)"/>
+  <rect x="828" y="184" width="56" height="15" fill="#fff"/>
+  <text x="856" y="196" text-anchor="middle" class="ts">doză [ml]</text>
+
+  <!-- gating influenteaza decizia (sageata spre clamp/actuator) -->
+  <path class="ln" d="M727,320 L727,228" marker-end="url(#ar)" stroke-dasharray="5 4"/>
+  <text x="744" y="300" class="ts">decide dacă udă</text>
+
+  <!-- reset I dupa udare -->
+  <path class="ln" d="M967,156 L967,118 L445,118 L445,138" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+  <text x="640" y="113" text-anchor="middle" class="ts">după udare: I = 0 (resetare integrator, anti-windup)</text>
+
+  <!-- ============ LEGENDA ============ -->
+  <rect x="30" y="440" width="890" height="140" rx="4" fill="#fafafa" stroke="#999" stroke-width="1"/>
+  <text x="44" y="462" class="tb" font-size="13">Cum funcţionează un ciclu de reglare</text>
+  <text x="44" y="485" class="ts">• Regulatorul rulează periodic (la ~10 min). Calculează eroarea e dintre setpoint şi umiditatea măsurată.</text>
+  <text x="44" y="506" class="ts">• Termenul integral acumulează „datoria de apă” cât timp solul e sub setpoint; termenul proporţional reacţionează la eroarea curentă.</text>
+  <text x="44" y="527" class="ts">• Doza propusă u = K_p·e + I se limitează între 5 şi 200 ml (cel puţin doza ţintă a clasei de plantă).</text>
+  <text x="44" y="548" class="ts">• Condiţiile de declanşare decid dacă se udă efectiv: cadenţă minimă (T_min), histerezis, pauză (anti-oscilaţie) şi un prag de siguranţă (safety_max).</text>
+  <text x="44" y="569" class="ts">• La udare, doza [ml] se transformă în durata de funcţionare a pompei (t = doză / debit Q), apoi integrala se resetează.</text>
+</svg>

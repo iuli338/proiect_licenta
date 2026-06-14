@@ -1,213 +1,110 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 850 1380"
-     font-family="serif" font-size="14">
-
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 980"
+     font-family="'Segoe UI', Arial, sans-serif">
   <defs>
-    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
-            markerWidth="8" markerHeight="8" orient="auto">
-      <path d="M0,0 L10,5 L0,10 z" fill="black"/>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
     </marker>
     <style>
-      .box-act    { fill: white; stroke: black; stroke-width: 1.5; }
-      .box-stop   { fill: #f0f0f0; stroke: #666; stroke-width: 1.2; }
-      .box-uda    { fill: #d8eedd; stroke: #2e7d4a; stroke-width: 1.8; }
-      .label      { font-size: 14px; }
-      .label-sym  { font-size: 15px; font-family: monospace; }
-      .label-sub  { font-size: 11px; fill: #555; font-style: italic; }
-      .label-no   { font-size: 12px; fill: #c0392b; font-weight: bold; }
-      .label-yes  { font-size: 12px; fill: #2e7d4a; font-weight: bold; }
-      .line       { stroke: black; stroke-width: 1.4; fill: none; }
-      .line-stop  { stroke: #999; stroke-width: 1.2; fill: none;
-                    stroke-dasharray: 4 3; }
+      .act   { fill:#fff; stroke:#000; stroke-width:1.6; }
+      .dec   { fill:#f0f0f0; stroke:#000; stroke-width:1.6; }
+      .stop  { fill:#fff; stroke:#000; stroke-width:1.4; stroke-dasharray:5 3; }
+      .uda   { fill:#e2e2e2; stroke:#000; stroke-width:2; }
+      .term  { fill:#e2e2e2; stroke:#000; stroke-width:1.6; }
+      .t     { font-size:13.5px; fill:#000; }
+      .tb    { font-size:14px; fill:#000; font-weight:700; }
+      .sym   { font-size:13.5px; fill:#000; font-family:'Cambria Math','Times New Roman',serif; }
+      .ts    { font-size:12px; fill:#000; }
+      .yn    { font-size:12.5px; fill:#000; font-weight:700; }
+      .ln    { stroke:#000; stroke-width:1.5; fill:none; }
+      .lns   { stroke:#000; stroke-width:1.3; fill:none; stroke-dasharray:4 3; }
     </style>
   </defs>
 
-  <!-- Titlu -->
-  <text x="425" y="28" text-anchor="middle" font-size="17" font-weight="bold">
-    Schema de decizie pentru udarea automată
-  </text>
-  <text x="425" y="48" text-anchor="middle" font-size="12" fill="#555">
-    Apelată la fiecare tick de regulator (10 min)
-  </text>
+  <text x="440" y="30" text-anchor="middle" font-size="17" font-weight="700">Schema de decizie pentru udarea automată</text>
+  <text x="440" y="50" text-anchor="middle" class="ts">(executată la fiecare ciclu de reglare, la ~10 min)</text>
 
-  <!-- ============================================
-       START
-       ============================================ -->
+  <!-- START -->
+  <ellipse cx="425" cy="92" rx="62" ry="20" class="term"/>
+  <text x="425" y="97" text-anchor="middle" class="tb">ÎNCEPUT ciclu</text>
+  <line x1="425" y1="112" x2="425" y2="134" class="ln" marker-end="url(#ar)"/>
 
-  <ellipse cx="425" cy="90" rx="60" ry="20" class="box-act"/>
-  <text x="425" y="95" text-anchor="middle" class="label">START tick</text>
+  <!-- 1. citire -->
+  <rect x="280" y="134" width="290" height="56" rx="4" class="act"/>
+  <text x="425" y="156" text-anchor="middle" class="sym">h = citire senzor</text>
+  <text x="425" y="176" text-anchor="middle" class="sym">dt = timp de la ultima udare</text>
+  <line x1="425" y1="190" x2="425" y2="212" class="ln" marker-end="url(#ar)"/>
 
-  <line x1="425" y1="110" x2="425" y2="135" class="line" marker-end="url(#arrow)"/>
+  <!-- 2. SAFETY  (centru y=244, semi-inaltime 32) -->
+  <polygon points="425,212 665,244 425,276 185,244" class="dec"/>
+  <text x="425" y="240" text-anchor="middle" class="sym">dt ≥ safety_max ?</text>
+  <text x="425" y="257" text-anchor="middle" class="ts">au trecut prea multe zile fără udare</text>
+  <line x1="425" y1="276" x2="425" y2="310" class="ln" marker-end="url(#ar)"/>
+  <text x="438" y="296" class="yn">NU</text>
+  <line x1="665" y1="244" x2="735" y2="244" class="ln" marker-end="url(#ar)"/>
+  <text x="682" y="236" class="yn">DA</text>
+  <rect x="735" y="215" width="125" height="58" rx="4" class="uda"/>
+  <text x="797" y="239" text-anchor="middle" class="tb">UDARE FORŢATĂ</text>
+  <text x="797" y="258" text-anchor="middle" class="ts">cu doza ţintă</text>
 
-  <!-- ============================================
-       1. Citire senzor + calcul timp
-       ============================================ -->
+  <!-- 3. ANTI-TWITCH  (centru y=342) -->
+  <polygon points="425,310 665,342 425,374 185,342" class="dec"/>
+  <text x="425" y="338" text-anchor="middle" class="sym">dt &lt; 6 h ?</text>
+  <text x="425" y="355" text-anchor="middle" class="ts">am udat foarte recent (anti-oscilaţie)</text>
+  <line x1="665" y1="342" x2="735" y2="342" class="lns" marker-end="url(#ar)"/>
+  <text x="682" y="334" class="yn">DA</text>
+  <rect x="735" y="315" width="125" height="54" rx="4" class="stop"/>
+  <text x="797" y="339" text-anchor="middle" class="tb">NU UDA</text>
+  <text x="797" y="357" text-anchor="middle" class="ts">pauză activă</text>
+  <line x1="425" y1="374" x2="425" y2="408" class="ln" marker-end="url(#ar)"/>
+  <text x="438" y="394" class="yn">NU</text>
 
-  <rect x="280" y="135" width="290" height="55" rx="4" class="box-act"/>
-  <text x="425" y="156" text-anchor="middle" class="label-sym">h = citire senzor</text>
-  <text x="425" y="174" text-anchor="middle" class="label-sym">dt = timp de la ultima udare</text>
+  <!-- 4. INTEGRALA -->
+  <rect x="275" y="408" width="300" height="70" rx="4" class="act"/>
+  <text x="425" y="430" text-anchor="middle" class="sym">e = setpoint − h</text>
+  <text x="425" y="450" text-anchor="middle" class="sym">dacă e &gt; 0:  I += K_i · e · Δt</text>
+  <text x="425" y="469" text-anchor="middle" class="ts">acumulează „datoria de apă” a plantei</text>
+  <line x1="425" y1="478" x2="425" y2="500" class="ln" marker-end="url(#ar)"/>
 
-  <line x1="425" y1="190" x2="425" y2="215" class="line" marker-end="url(#arrow)"/>
+  <!-- 5. HISTEREZIS  (centru y=532) -->
+  <polygon points="425,500 665,532 425,564 185,532" class="dec"/>
+  <text x="425" y="528" text-anchor="middle" class="sym">h &gt; setpoint − hist ?</text>
+  <text x="425" y="545" text-anchor="middle" class="ts">solul încă are destulă apă</text>
+  <line x1="665" y1="532" x2="735" y2="532" class="lns" marker-end="url(#ar)"/>
+  <text x="682" y="524" class="yn">DA</text>
+  <rect x="735" y="505" width="125" height="54" rx="4" class="stop"/>
+  <text x="797" y="529" text-anchor="middle" class="tb">NU UDA</text>
+  <text x="797" y="547" text-anchor="middle" class="ts">solul e ok</text>
+  <line x1="425" y1="564" x2="425" y2="598" class="ln" marker-end="url(#ar)"/>
+  <text x="438" y="584" class="yn">NU</text>
 
-  <!-- ============================================
-       2. SAFETY MAX
-       ============================================ -->
+  <!-- 6. CADENTA  (centru y=630) -->
+  <polygon points="425,598 665,630 425,662 185,630" class="dec"/>
+  <text x="425" y="626" text-anchor="middle" class="sym">dt ≥ T_min ?</text>
+  <text x="425" y="643" text-anchor="middle" class="ts">a trecut cadenţa biologică a plantei</text>
+  <line x1="185" y1="630" x2="115" y2="630" class="lns" marker-end="url(#ar)"/>
+  <text x="142" y="622" class="yn">NU</text>
+  <rect x="0" y="603" width="115" height="54" rx="4" class="stop"/>
+  <text x="57" y="627" text-anchor="middle" class="tb">NU UDA</text>
+  <text x="57" y="645" text-anchor="middle" class="ts">aşteaptă cadenţa</text>
+  <line x1="425" y1="662" x2="425" y2="696" class="ln" marker-end="url(#ar)"/>
+  <text x="438" y="682" class="yn">DA</text>
 
-  <polygon points="425,215 660,278 425,340 190,278" class="box-act"/>
-  <text x="425" y="265" text-anchor="middle" class="label-sym">dt ≥ safety_max ?</text>
-  <text x="425" y="283" text-anchor="middle" class="label-sub">au trecut prea multe zile fără udare</text>
-  <text x="425" y="300" text-anchor="middle" class="label-sub">(safety_max ≈ 1.2 × T_min)</text>
+  <!-- 7. CALCUL DOZA -->
+  <rect x="215" y="696" width="420" height="74" rx="4" class="act"/>
+  <text x="425" y="718" text-anchor="middle" class="sym">doza = max( K_p · e + I ,  doza ţintă )</text>
+  <text x="425" y="739" text-anchor="middle" class="sym">doza = clamp( doza, 5, 200 )  [ml]</text>
+  <text x="425" y="759" text-anchor="middle" class="ts">PI propune cantitatea, clasa de plantă impune un minim</text>
+  <line x1="425" y1="770" x2="425" y2="804" class="ln" marker-end="url(#ar)"/>
 
-  <!-- NU → în jos -->
-  <line x1="425" y1="340" x2="425" y2="375" class="line" marker-end="url(#arrow)"/>
-  <text x="440" y="358" class="label-no">NU</text>
+  <!-- 8. UDARE + reset -->
+  <rect x="270" y="804" width="310" height="72" rx="4" class="uda"/>
+  <text x="425" y="826" text-anchor="middle" class="tb">UDARE</text>
+  <text x="425" y="846" text-anchor="middle" class="sym">pompă ON timp de (doza / debit) s</text>
+  <text x="425" y="865" text-anchor="middle" class="sym">I = 0  (resetare anti-windup)</text>
+  <line x1="425" y1="876" x2="425" y2="906" class="ln" marker-end="url(#ar)"/>
 
-  <!-- DA → dreapta către "UDA forțat" -->
-  <line x1="660" y1="278" x2="730" y2="278" class="line" marker-end="url(#arrow)"/>
-  <text x="675" y="270" class="label-yes">DA</text>
-
-  <rect x="730" y="250" width="110" height="55" rx="4" class="box-uda"/>
-  <text x="785" y="272" text-anchor="middle" class="label" font-weight="bold">UDARE FORŢATĂ</text>
-  <text x="785" y="290" text-anchor="middle" class="label-sub">cu target_dose_ml</text>
-
-  <!-- ============================================
-       3. ANTI-TWITCH
-       ============================================ -->
-
-  <polygon points="425,375 660,438 425,500 190,438" class="box-act"/>
-  <text x="425" y="425" text-anchor="middle" class="label-sym">dt &lt; 6 h ?</text>
-  <text x="425" y="443" text-anchor="middle" class="label-sub">am udat foarte recent</text>
-  <text x="425" y="460" text-anchor="middle" class="label-sub">(anti-twitch, evită impulsuri)</text>
-
-  <!-- DA → STOP -->
-  <line x1="660" y1="438" x2="730" y2="438" class="line-stop" marker-end="url(#arrow)"/>
-  <text x="675" y="430" class="label-yes">DA</text>
-
-  <rect x="730" y="410" width="110" height="55" rx="4" class="box-stop"/>
-  <text x="785" y="432" text-anchor="middle" class="label">NU UDA</text>
-  <text x="785" y="450" text-anchor="middle" class="label-sub">cooldown activ</text>
-
-  <!-- NU → în jos -->
-  <line x1="425" y1="500" x2="425" y2="535" class="line" marker-end="url(#arrow)"/>
-  <text x="440" y="518" class="label-no">NU</text>
-
-  <!-- ============================================
-       4. Acumulare integrală
-       ============================================ -->
-
-  <rect x="280" y="535" width="290" height="70" rx="4" class="box-act"/>
-  <text x="425" y="556" text-anchor="middle" class="label-sym">e = setpoint − h</text>
-  <text x="425" y="575" text-anchor="middle" class="label-sym">dacă e &gt; 0: I += Ki · e · Δt</text>
-  <text x="425" y="595" text-anchor="middle" class="label-sub">acumulez "datoria" de apă a plantei</text>
-
-  <line x1="425" y1="605" x2="425" y2="630" class="line" marker-end="url(#arrow)"/>
-
-  <!-- ============================================
-       5. Test histerezis
-       ============================================ -->
-
-  <polygon points="425,630 660,693 425,755 190,693" class="box-act"/>
-  <text x="425" y="680" text-anchor="middle" class="label-sym">h &gt; setpoint − hist ?</text>
-  <text x="425" y="698" text-anchor="middle" class="label-sub">solul încă are destulă apă</text>
-  <text x="425" y="715" text-anchor="middle" class="label-sub">(nu am scăzut sub prag)</text>
-
-  <!-- DA → STOP -->
-  <line x1="660" y1="693" x2="730" y2="693" class="line-stop" marker-end="url(#arrow)"/>
-  <text x="675" y="685" class="label-yes">DA</text>
-
-  <rect x="730" y="665" width="110" height="55" rx="4" class="box-stop"/>
-  <text x="785" y="687" text-anchor="middle" class="label">NU UDA</text>
-  <text x="785" y="705" text-anchor="middle" class="label-sub">solul e ok</text>
-
-  <!-- NU → în jos -->
-  <line x1="425" y1="755" x2="425" y2="790" class="line" marker-end="url(#arrow)"/>
-  <text x="440" y="773" class="label-no">NU</text>
-
-  <!-- ============================================
-       6. Test cadenţă biologică (T_min)
-       ============================================ -->
-
-  <polygon points="425,790 660,853 425,915 190,853" class="box-act"/>
-  <text x="425" y="840" text-anchor="middle" class="label-sym">dt ≥ T_min ?</text>
-  <text x="425" y="858" text-anchor="middle" class="label-sub">a trecut cadenţa biologică</text>
-  <text x="425" y="875" text-anchor="middle" class="label-sub">specifică plantei</text>
-
-  <!-- NU → STOP -->
-  <line x1="190" y1="853" x2="120" y2="853" class="line-stop" marker-end="url(#arrow)"/>
-  <text x="155" y="845" class="label-no">NU</text>
-
-  <rect x="10" y="825" width="110" height="55" rx="4" class="box-stop"/>
-  <text x="65" y="847" text-anchor="middle" class="label">NU UDA</text>
-  <text x="65" y="865" text-anchor="middle" class="label-sub">aşteptăm cadenţa</text>
-
-  <!-- DA → în jos -->
-  <line x1="425" y1="915" x2="425" y2="950" class="line" marker-end="url(#arrow)"/>
-  <text x="440" y="933" class="label-yes">DA</text>
-
-  <!-- ============================================
-       7. Calcul doză
-       ============================================ -->
-
-  <rect x="225" y="950" width="400" height="75" rx="4" class="box-act"/>
-  <text x="425" y="971" text-anchor="middle" class="label-sym">doza = max( Kp·e + I,  target_dose_ml )</text>
-  <text x="425" y="993" text-anchor="middle" class="label-sym">doza = clamp( doza, 5, 200 ) [ml]</text>
-  <text x="425" y="1014" text-anchor="middle" class="label-sub">PI propune o cantitate, plantarea forţează un minim</text>
-
-  <line x1="425" y1="1025" x2="425" y2="1060" class="line" marker-end="url(#arrow)"/>
-
-  <!-- ============================================
-       8. Udare + reset integral
-       ============================================ -->
-
-  <rect x="275" y="1060" width="300" height="75" rx="4" class="box-uda"/>
-  <text x="425" y="1083" text-anchor="middle" class="label" font-weight="bold">UDARE</text>
-  <text x="425" y="1103" text-anchor="middle" class="label-sym">pompă ON pentru (doza / debit) secunde</text>
-  <text x="425" y="1122" text-anchor="middle" class="label-sym">I = 0  (reset anti-windup)</text>
-
-  <line x1="425" y1="1135" x2="425" y2="1165" class="line" marker-end="url(#arrow)"/>
-
-  <!-- ============================================
-       END
-       ============================================ -->
-
-  <ellipse cx="425" cy="1185" rx="60" ry="20" class="box-act"/>
-  <text x="425" y="1190" text-anchor="middle" class="label">END tick</text>
-
-  <!-- ============================================
-       Legendă
-       ============================================ -->
-
-  <rect x="20" y="1240" width="810" height="120" rx="4" fill="#fafafa" stroke="#ccc"/>
-  <text x="30" y="1260" font-size="13" font-weight="bold">Legendă notaţii:</text>
-
-  <text x="30" y="1282" class="label">h</text>
-  <text x="55" y="1282" class="label-sub">= umiditate sol măsurată (%)</text>
-
-  <text x="30" y="1302" class="label">e</text>
-  <text x="55" y="1302" class="label-sub">= eroare = setpoint − h (%)</text>
-
-  <text x="30" y="1322" class="label">I</text>
-  <text x="55" y="1322" class="label-sub">= acumulator integral (ml)</text>
-
-  <text x="30" y="1342" class="label">dt</text>
-  <text x="55" y="1342" class="label-sub">= timp scurs de la ultima udare</text>
-
-  <text x="290" y="1282" class="label">T_min</text>
-  <text x="345" y="1282" class="label-sub">= cadenţa biologică (din clasa plantei)</text>
-
-  <text x="290" y="1302" class="label">hist</text>
-  <text x="345" y="1302" class="label-sub">= histerezis sub setpoint (5%)</text>
-
-  <text x="290" y="1322" class="label">target_dose_ml</text>
-  <text x="425" y="1322" class="label-sub">= doza ţintă per udare (din clasă)</text>
-
-  <text x="290" y="1342" class="label">safety_max</text>
-  <text x="385" y="1342" class="label-sub">= override de siguranţă (1.2 × T_min)</text>
-
-  <text x="640" y="1282" class="label">Kp, Ki</text>
-  <text x="685" y="1282" class="label-sub">= câştiguri PI (acordare IMC)</text>
-
-  <text x="640" y="1302" class="label">Δt</text>
-  <text x="685" y="1302" class="label-sub">= pas regulator (10 min)</text>
-
+  <!-- END -->
+  <ellipse cx="425" cy="928" rx="62" ry="20" class="term"/>
+  <text x="425" y="933" text-anchor="middle" class="tb">SFÂRŞIT ciclu</text>
 </svg>
