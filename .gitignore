@@ -18,3 +18,21 @@ dist/
 desene/
 partea scrisa/
 *.spec
+
+# Backup-uri de stare generate la teste
+data/*.json.backup*
+
+# misc/ tine doar SURSE (SVG, .py, .md, .csv). Ignoram:
+#  - PNG-urile generate din SVG (regenerabile prin Chrome headless)
+#  - pozele/foto si modelele CAD (imagini binare mari, doar pt figurile lucrarii)
+misc/*.png
+misc/*.jpg
+misc/*.jpeg
+
+# IDE / editor
+.vscode/
+.idea/
+
+# Fisiere temporare de lucru / analiza
+p2_err.txt
+*_err.txt
