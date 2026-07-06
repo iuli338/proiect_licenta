@@ -33,6 +33,16 @@ _MOCK_START = time.time()
 # Cât durează handshake-ul simulat (secunde) de la pornirea serverului.
 _MOCK_HANDSHAKE_S = 15.0
 
+# Recovery simulat (DROPWISE_HUB_MODE=mock): imită o udare întreruptă de o pană
+# de curent, ca să putem testa modalul din UI fără hardware. `pending` porneşte
+# True (apare modalul la deschidere); Accept/Dismiss îl trec pe False.
+_MOCK_RECOVERY = {
+    "pending": True,
+    "port": 2,
+    "remaining_ml": 45,
+    "plant": "Calathea",
+}
+
 
 def _mock_sensors(node_name: str) -> dict:
     """
@@ -140,6 +150,9 @@ def _mock_hub_status() -> dict:
         # Debitul pompei (ml/s) — pe live vine din firmware; în mock,
         # valoarea implicită de fabrică (aceeaşi ca PUMP_FLOW_DEFAULT).
         "flow_ml_per_sec": 3.21,
+        # Recovery: udare întreruptă de o pană de curent. Pe live vine din
+        # firmware (slotul EEPROM); în mock, din _MOCK_RECOVERY.
+        "recovery": dict(_MOCK_RECOVERY) if _MOCK_RECOVERY["pending"] else {"pending": False},
     }
 
 
@@ -401,6 +414,36 @@ def api_hub_toggle(pin):
     try:
         r = requests.get(f"http://{hub_ip}/toggle/{pin}", timeout=1.5,
                          headers=auth.hub_headers())
+        return jsonify(r.json()), r.status_code
+    except requests.RequestException as e:
+        return jsonify({"error": str(e)}), 502
+
+
+@bp.route("/api/hub/recovery/<action>", methods=["POST"])
+@login_required
+def api_hub_recovery(action):
+    """
+    Recovery după o pană de curent care a întrerupt o udare.
+      action = "accept"  → hub-ul reia udarea cu ml-ii rămaşi
+      action = "dismiss" → hub-ul renunţă şi zeroizează slotul de recovery
+    În ambele cazuri, `recovery.pending` din /status devine False după.
+    """
+    if action not in ("accept", "dismiss"):
+        abort(400)
+
+    if nodes.get_hub_mode() == "mock":
+        # În mock, doar oprim simularea (modalul nu mai apare la următorul poll).
+        _MOCK_RECOVERY["pending"] = False
+        return jsonify({"status": "resumed" if action == "accept" else "dismissed",
+                        "mock": True})
+
+    state = load_state()
+    hub_ip = state["hub"].get("ip")
+    if not hub_ip or requests is None:
+        return jsonify({"error": "hub_unavailable"}), 503
+    try:
+        r = requests.post(f"http://{hub_ip}/recovery/{action}", timeout=2,
+                          headers=auth.hub_headers())
         return jsonify(r.json()), r.status_code
     except requests.RequestException as e:
         return jsonify({"error": str(e)}), 502

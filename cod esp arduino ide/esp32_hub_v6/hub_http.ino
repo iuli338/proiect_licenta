@@ -4,6 +4,10 @@
    variabilele globale si include-urile sunt in esp32_hub_v6.ino.
    ============================================================ */
 
+// escapeJson e definit in hub_http_node.ino (dupa acest fisier in ordinea de
+// concatenare); forward declaration ca sa-l putem folosi in handleStatus().
+static String escapeJson(const char* s);
+
 // Format float pentru JSON: NaN / Inf / -Inf → "null".
 // `decimals` controlează numărul de zecimale (umiditate / temperaturi 1, lux 0).
 static String jsonFloat(float v, int decimals) {
@@ -365,6 +369,22 @@ void handleStatus() {
     json += ",\"flow_ml_per_sec\":";
     json += fbuf;
   }
+  // RECOVERY: dacă o udare a fost întreruptă de o pană de curent, expunem
+  // portul, planta şi ml-ii rămaşi. Dashboard-ul afişează un modal pe Monitor
+  // care cere utilizatorului să reia sau să renunţe. `pending=false` cât timp
+  // nu e nimic de recuperat.
+  json += ",\"recovery\":{\"pending\":";
+  json += (recoveryPending ? "true" : "false");
+  if (recoveryPending) {
+    json += ",\"port\":";
+    json += (recoveryPendingPort + 1);   // 1-based pentru UI
+    json += ",\"remaining_ml\":";
+    json += recoveryPendingMl;
+    json += ",\"plant\":\"";
+    json += escapeJson(recoveryPendingPlant);
+    json += "\"";
+  }
+  json += "}";
   json += "}";
 
   sendCorsHeaders();

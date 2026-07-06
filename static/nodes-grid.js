@@ -182,6 +182,10 @@
       window.Dropwise.lastHubData = j.data;
       window.dispatchEvent(new CustomEvent('dropwise:hub-status-updated'));
 
+      // Recovery: dacă hub-ul raportează o udare întreruptă de o pană de
+      // curent, afişăm modalul (doar cât timp suntem pe tab-ul Monitor).
+      maybeShowRecovery(j.data.recovery);
+
       // Detectare boot nou: uptime scade vs. ce ţineam minte.
       const upt = j.data.uptime_ms;
       if (upt != null) {
@@ -1769,7 +1773,107 @@
     doCloseGraphView();
   };
 
+  // ---------- Recovery: udare intreruptă de pană de curent ----------
+  //
+  // Hub-ul raportează în /status un obiect `recovery`. Dacă `pending` e true,
+  // afişăm un modal pe tab-ul Monitor care cere utilizatorului să reia udarea
+  // (cu ml-ii rămaşi) sau să renunţe. Modalul reapare la fiecare intrare pe
+  // Monitor cât timp `pending` rămâne true — dispare doar după Accept/Refuză.
+
+  let recoveryBusy = false;          // cât timp aşteptăm răspunsul unui buton
+  let lastRecovery = null;           // ultimul obiect recovery primit din status
+
+  function recoveryDialog() { return document.getElementById('recovery-dialog'); }
+
+  function onMonitorTab() {
+    const panel = document.getElementById('panel-monitor');
+    return !!(panel && panel.dataset.active === 'true');
+  }
+
+  // Apelată la fiecare poll cu obiectul recovery din status. Deschide modalul
+  // dacă e nevoie; îl închide dacă hub-ul nu mai raportează nimic de recuperat.
+  function maybeShowRecovery(recovery) {
+    lastRecovery = recovery || null;
+    const dlg = recoveryDialog();
+    if (!dlg) return;
+    const pending = !!(recovery && recovery.pending);
+    if (!pending) {
+      // Nimic de recuperat — dacă modalul e deschis (ex. altcineva a rezolvat
+      // recovery-ul între timp), îl închidem.
+      if (dlg.open) dlg.close();
+      return;
+    }
+    // Populăm textul cu datele curente.
+    const ml = document.getElementById('recovery-ml');
+    const plant = document.getElementById('recovery-plant');
+    const port = document.getElementById('recovery-port');
+    if (ml) ml.textContent = (recovery.remaining_ml != null ? recovery.remaining_ml : '—');
+    if (plant) plant.textContent = recovery.plant || 'plantă neconfigurată';
+    if (port) port.textContent = (recovery.port != null ? recovery.port : '—');
+    // Afişăm modalul doar pe tab-ul Monitor şi doar dacă nu e deja deschis.
+    if (onMonitorTab() && !dlg.open && !recoveryBusy) {
+      const err = document.getElementById('recovery-error');
+      if (err) err.hidden = true;
+      dlg.showModal();
+    }
+  }
+
+  // Re-afişează modalul la intrarea pe Monitor, dacă recovery e încă pending.
+  function recoveryOnMonitorEnter() {
+    if (lastRecovery && lastRecovery.pending) {
+      maybeShowRecovery(lastRecovery);
+    }
+  }
+
+  // Trimite Accept sau Refuză către backend, apoi închide modalul.
+  async function sendRecoveryAction(action) {
+    if (recoveryBusy) return;
+    recoveryBusy = true;
+    const dlg = recoveryDialog();
+    const err = document.getElementById('recovery-error');
+    try {
+      await nodes.getJSON('/api/hub/recovery/' + action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      lastRecovery = { pending: false };
+      if (dlg && dlg.open) dlg.close();
+      showResetToast(
+        action === 'accept' ? 'Udarea a fost reluată.' : 'Udarea întreruptă a fost anulată.',
+        action === 'accept' ? 'ok' : 'warn');
+      if (nodes.pollMonitor) nodes.pollMonitor();   // reîmprospătare imediată
+    } catch (e) {
+      if (err) { err.textContent = 'Nu am putut trimite comanda: ' + (e.message || e); err.hidden = false; }
+    } finally {
+      recoveryBusy = false;
+    }
+  }
+
+  function initRecoveryDialog() {
+    const dlg = recoveryDialog();
+    if (!dlg) return;
+    const acceptBtn = document.getElementById('recovery-accept');
+    const dismissBtn = document.getElementById('recovery-dismiss');
+    if (acceptBtn) acceptBtn.addEventListener('click', () => sendRecoveryAction('accept'));
+    if (dismissBtn) dismissBtn.addEventListener('click', () => sendRecoveryAction('dismiss'));
+    // Modalul e "persistent": dacă userul îl închide cu Esc sau click pe fundal
+    // fără să aleagă, îl redeschidem cât timp recovery-ul e încă pending.
+    dlg.addEventListener('cancel', (ev) => ev.preventDefault());
+    dlg.addEventListener('close', () => {
+      if (!recoveryBusy && lastRecovery && lastRecovery.pending && onMonitorTab()) {
+        // reopen la următorul tick (evită bucla sincronă)
+        setTimeout(() => { if (!dlg.open) dlg.showModal(); }, 0);
+      }
+    });
+  }
+
   nodes.initGrid = function () {
+    initRecoveryDialog();
+    // Re-afişează modalul de recovery la intrarea pe tab-ul Monitor.
+    window.addEventListener('dropwise:tab-activated', (ev) => {
+      if (ev.detail && ev.detail.tab === 'monitor') recoveryOnMonitorEnter();
+    });
+
     // Click în afara unui meniu ⋯ => îl închidem.
     document.addEventListener('click', (ev) => {
       if (!ev.target.closest('.node-card__menu')) closeAllNodeMenus();

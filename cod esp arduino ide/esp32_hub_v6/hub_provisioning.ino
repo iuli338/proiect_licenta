@@ -326,6 +326,12 @@ void startNormalMode() {
     server.on(autoUri.c_str(),   HTTP_OPTIONS, handleOptions);
   }
 
+  // /recovery/accept + /recovery/dismiss — udare intrerupta de pana de curent.
+  server.on("/recovery/accept",  HTTP_POST,    handleRecoveryAccept);
+  server.on("/recovery/accept",  HTTP_OPTIONS, handleOptions);
+  server.on("/recovery/dismiss", HTTP_POST,    handleRecoveryDismiss);
+  server.on("/recovery/dismiss", HTTP_OPTIONS, handleOptions);
+
   server.begin();
 
   // LED-ul intern ramane aprins fix in mod normal (semn de "operational").

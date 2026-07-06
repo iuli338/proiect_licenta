@@ -21,6 +21,7 @@ static_assert(sizeof(NodeConfig)    == NODE_CONFIG_SIZE, "NodeConfig != 128 B");
 static_assert(sizeof(RegParams)     == REG_PARAMS_SIZE,  "RegParams != 64 B");
 static_assert(sizeof(NodeStats)     == NODE_STATS_SIZE,  "NodeStats != 64 B");
 static_assert(sizeof(SystemConfig)  == SYS_CONFIG_SIZE,  "SystemConfig != 64 B");
+static_assert(sizeof(RecoveryState) == RECOVERY_SIZE,    "RecoveryState != 64 B");
 
 // ---------- Offset per NUME NOD ----------
 //
@@ -324,4 +325,71 @@ bool saveFlowRate(float mlPerSec) {
   Serial.print(pumpFlowMlPerSec);
   Serial.println(" ml/s");
   return true;
+}
+
+// ---------- RecoveryState (udare intrerupta de pana de curent) ----------
+
+bool storageLoadRecovery(RecoveryState& rs) {
+  if (!eepromReady) { memset(&rs, 0, sizeof(rs)); return false; }
+  return eepromRead(EEPROM_OFFSET_RECOVERY, (uint8_t*)&rs, sizeof(rs));
+}
+
+bool storageSaveRecovery(const RecoveryState& rs) {
+  if (!eepromReady) return false;
+  i2cBusyDepth++;
+  bool ok = eepromWrite(EEPROM_OFFSET_RECOVERY, (const uint8_t*)&rs, sizeof(rs));
+  i2cBusyDepth--;
+  return ok;
+}
+
+// Zeroizeaza slotul de recovery (valid = 0). Apelat la finalul unei udari
+// normale, cand userul accepta reluarea, sau cand o refuza.
+void storageClearRecovery() {
+  RecoveryState rs;
+  memset(&rs, 0, sizeof(rs));
+  storageSaveRecovery(rs);
+  recoveryPending = false;   // sincronizam si starea din RAM
+}
+
+// Salveaza progresul udarii curente in EEPROM. Apelata periodic din PHASE_PUMPING.
+// `remainingMl` = cati ml mai raman de livrat (deja calculati de apelant).
+// Numele plantei se ia din NodeConfig-ul portului (pentru afisare in modal).
+void saveWateringProgress(int port, uint16_t remainingMl) {
+  if (!eepromReady || port < 0 || port >= NUM_PORTS) return;
+  RecoveryState rs;
+  memset(&rs, 0, sizeof(rs));
+  rs.valid       = 1;
+  rs.port        = (uint8_t)port;
+  rs.remainingMl = remainingMl;
+  rs.timestamp   = rtcOk ? rtcEpoch() : 0;
+  // Numele plantei din configul nodului (daca e configurat).
+  NodeConfig cfg;
+  if (storageLoadConfig(portName[port], cfg) && cfg.configured) {
+    strncpy(rs.plantName, cfg.plantName, sizeof(rs.plantName) - 1);
+  }
+  storageSaveRecovery(rs);
+}
+
+// La boot (dupa loadFlowRate): verifica daca a ramas o udare neterminata in
+// EEPROM. Daca da, umple variabilele globale recoveryPending* si logheaza —
+// udarea NU se reia automat, ci asteapta decizia userului (expusa in /status).
+void checkWateringRecovery() {
+  recoveryPending = false;
+  if (!eepromReady) return;
+  RecoveryState rs;
+  if (!storageLoadRecovery(rs)) return;
+  if (rs.valid != 1) return;
+  if (rs.port >= NUM_PORTS) { storageClearRecovery(); return; }
+  // Doza restanta trebuie sa fie plauzibila; altfel ignoram slotul.
+  if (rs.remainingMl == 0 || rs.remainingMl > DOSE_MAX_ML) { storageClearRecovery(); return; }
+
+  recoveryPending     = true;
+  recoveryPendingPort = rs.port;
+  recoveryPendingMl   = rs.remainingMl;
+  memcpy(recoveryPendingPlant, rs.plantName, sizeof(recoveryPendingPlant));
+  recoveryPendingPlant[sizeof(recoveryPendingPlant) - 1] = '\0';
+
+  bootLogf("RECOVERY: udare intrerupta pe P%d, %u ml ramasi (%s)\n",
+           rs.port + 1, rs.remainingMl,
+           recoveryPendingPlant[0] ? recoveryPendingPlant : "neconfigurat");
 }

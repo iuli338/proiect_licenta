@@ -69,6 +69,7 @@
 // Timing
 #define VALVE_OPEN_DELAY  2000  // ms intre deschidere valva si pornire pompa
 #define PUMP_STOP_DELAY   1000  // ms intre oprire pompa si inchidere valva
+#define RECOVERY_SAVE_MS  1000  // ms intre salvarile progresului udarii (recovery)
 
 // ---------- Regulator PI automat (vezi misc/decizie_udare_diagrama.svg) ----------
 //
@@ -145,8 +146,9 @@
 // iniţializăm. La schimbarea layout-ului incrementăm versiunea.
 
 #define EEPROM_MAGIC              "DROPv01"   // 8 B (cu \0)
-#define EEPROM_LAYOUT_VERSION     7   // bump => re-init la urmatorul boot
+#define EEPROM_LAYOUT_VERSION     8   // bump => re-init la urmatorul boot
                                       // (v7: slot SystemConfig — debit pompa)
+                                      // (v8: slot RecoveryState — udare intrerupta)
 
 #define EEPROM_OFFSET_HEADER      0x0000      // 32 B (resv 64 B pana la slot)
 #define EEPROM_OFFSET_CONFIG_P1   0x0040      // 128 B per port
@@ -159,13 +161,15 @@
 #define EEPROM_OFFSET_STATS_P2    0x02C0
 #define EEPROM_OFFSET_STATS_P3    0x0300
 #define EEPROM_OFFSET_SYSCFG      0x0340      // 64 B — config global sistem
-// 0x0380..0x0FFF rezervat pentru extensii
+#define EEPROM_OFFSET_RECOVERY    0x0380      // 64 B — udare intrerupta (recovery)
+// 0x03C0..0x0FFF rezervat pentru extensii
 // 0x1000..0x7FFF (~28 KB) rezervat pentru log inelar de udări (etapă viitoare)
 
 #define NODE_CONFIG_SIZE          128
 #define REG_PARAMS_SIZE           64
 #define NODE_STATS_SIZE           64
 #define SYS_CONFIG_SIZE           64
+#define RECOVERY_SIZE             64
 
 // ---------- Autentificare (cod de acces) ----------
 //
@@ -234,6 +238,18 @@ unsigned long phaseStartTime = 0;
 // `doseLastMl` reţine doza ultimă (folosit la finalizare pt. statistici).
 unsigned long doseDurationMs = 0;   // 0 = udare manuală (fără auto-stop)
 uint16_t      doseLastMl     = 0;
+
+// ---------- Recovery: udare intrerupta de pana de curent ----------
+// Cat timp livram apa, salvam periodic in EEPROM cati ml mai raman (throttle la
+// ~1 s, ca sa nu uzam AT24C). `recoveryLastSaveMs` retine ultima scriere.
+// La boot, checkWateringRecovery() umple `recoveryPending`/`recoveryPendingMl`/
+// `recoveryPendingPort`/`recoveryPendingPlant` daca gaseste un slot valid;
+// udarea NU se reia automat — asteapta decizia userului din dashboard.
+unsigned long recoveryLastSaveMs   = 0;
+bool          recoveryPending      = false;
+uint8_t       recoveryPendingPort  = 0;
+uint16_t      recoveryPendingMl    = 0;
+char          recoveryPendingPlant[32] = {0};
 
 // Debitul activ al pompei [ml/s]. Iniţializat cu valoarea de fabrică; la boot,
 // dacă EEPROM-ul are un debit salvat valid, e suprascris în loadFlowRate().
@@ -387,6 +403,23 @@ typedef struct __attribute__((packed)) {
   uint8_t  reserved[61];
 } SystemConfig;                   // 64 B
 
+// ---------- Stare de recovery (udare intrerupta de pana de curent) ----------
+// Cat timp pompa livreaza apa (PHASE_PUMPING), hub-ul salveaza periodic in acest
+// slot cati ml mai raman de livrat si pentru care planta. Daca se ia curentul in
+// mijlocul udarii, la boot slotul ramane `valid = 1` si udarea NU se reia automat:
+// e expusa in /status, iar utilizatorul decide din dashboard (Accept = reia cu
+// ml-ii ramasi, Refuza = renunta). Slotul se zeroizeaza la finalul unei udari
+// normale, la Accept sau la Refuza.
+// 1×uint8 + 1×uint8 + 32×char + 1×uint16 + 1×uint32 = 40 B; reserved[24] => 64 B.
+typedef struct __attribute__((packed)) {
+  uint8_t  valid;                 // 1 = udare intrerupta in asteptare
+  uint8_t  port;                  // portul udat (0..NUM_PORTS-1)
+  char     plantName[32];         // numele plantei (pentru afisare in modal)
+  uint16_t remainingMl;           // ml ramasi de livrat in momentul salvarii
+  uint32_t timestamp;             // epoch UTC cand a fost salvat (0 daca RTC absent)
+  uint8_t  reserved[24];
+} RecoveryState;                  // 64 B
+
 // ---------- Stare provisioning (BLE) ----------
 
 BLEServer*         bleServer       = nullptr;
@@ -513,6 +546,12 @@ void setup() {
   // Debitul pompei: dacă EEPROM-ul e OK şi conţine un debit salvat valid,
   // îl încarcă în pumpFlowMlPerSec; altfel rămâne valoarea de fabrică.
   loadFlowRate();
+
+  // Recovery: dacă o udare a fost întreruptă de o pană de curent, slotul de
+  // recovery din EEPROM e încă valid. Îl încărcăm în variabilele recoveryPending*
+  // (nu reluăm automat — utilizatorul decide din dashboard, prin modalul de pe
+  // tab-ul Monitor).
+  checkWateringRecovery();
 
   // Rezumat status module — apare in /diagnostics.
   bootLogf("OLED  - %s\n", oledOk      ? "OK" : "lipsa");

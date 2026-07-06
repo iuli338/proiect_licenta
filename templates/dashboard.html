@@ -214,6 +214,40 @@
     </div>
   </dialog>
 
+  <!-- ============== DIALOG: udare intrerupta (recovery) ============== -->
+  <dialog id="recovery-dialog" class="modal">
+    <div class="modal__card">
+      <div class="modal__icon modal__icon--warn" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M10.29 3.86 L1.82 18 a 2 2 0 0 0 1.71 3 h16.94 a 2 2 0 0 0 1.71 -3 L13.71 3.86 a 2 2 0 0 0 -3.42 0 z"/>
+          <path d="M12 9 v4"/>
+          <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
+        </svg>
+      </div>
+
+      <h2 class="modal__title">Udare întreruptă</h2>
+
+      <p class="modal__text">
+        O udare a fost întreruptă de o pană de curent. Au mai rămas
+        <strong id="recovery-ml">—</strong> ml de udat pentru
+        <strong id="recovery-plant">—</strong> (portul
+        <strong id="recovery-port">—</strong>).
+        Vrei ca hub-ul să reia udarea cu cantitatea rămasă?
+      </p>
+
+      <p id="recovery-error" class="modal__error" role="alert" hidden></p>
+
+      <div class="modal__actions">
+        <button type="button" id="recovery-dismiss" class="btn btn--ghost">
+          Refuză
+        </button>
+        <button type="button" id="recovery-accept" class="btn btn--primary">
+          Reia udarea
+        </button>
+      </div>
+    </div>
+  </dialog>
+
   <!-- ============== FOOTER ============== -->
   <footer class="dashboard-footer">
     <span>Dropwise Dashboard <span class="mono">v0.1.0</span></span>

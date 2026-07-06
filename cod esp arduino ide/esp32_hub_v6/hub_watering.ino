@@ -205,6 +205,18 @@ void updateWateringStateMachine() {
       break;
 
     case PHASE_PUMPING:
+      // RECOVERY: cat timp livram o doza fixa, salvam periodic in EEPROM cati
+      // ml mai raman, ca sa putem relua daca se ia curentul. Doar in mod "dose"
+      // (doseDurationMs > 0) — udarea manuala nelimitata nu are tinta de reluat.
+      if (doseDurationMs > 0 && wateringPort >= 0 &&
+          (now - recoveryLastSaveMs) >= RECOVERY_SAVE_MS) {
+        recoveryLastSaveMs = now;
+        // ml livrati pana acum = debit × timp_scurs; ml ramasi = doza − livrati.
+        float deliveredMl = pumpFlowMlPerSec * (now - phaseStartTime) / 1000.0f;
+        int remaining = (int)doseLastMl - (int)(deliveredMl + 0.5f);
+        if (remaining < 0) remaining = 0;
+        saveWateringProgress(wateringPort, (uint16_t)remaining);
+      }
       // Dacă suntem în mod "dose", oprim automat după durata calculată.
       // Pentru udarea manuală (doseDurationMs == 0), aşteptăm /water/stop.
       if (doseDurationMs > 0 && (now - phaseStartTime) >= doseDurationMs) {
@@ -251,6 +263,10 @@ void updateWateringStateMachine() {
             Serial.println(" ml");
           }
         }
+        // RECOVERY: udarea s-a terminat normal — zeroizam slotul de recovery
+        // ca sa nu apara un fals "udare intrerupta" la urmatorul boot.
+        storageClearRecovery();
+
         // Reset state pentru următoarea udare.
         doseDurationMs = 0;
         doseLastMl     = 0;
